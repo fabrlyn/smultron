@@ -1,19 +1,23 @@
 #include <Arduino.h>
-#include <ESP8266WiFi.h>
-#include <ESP8266WebServer.h>
-#include <DNSServer.h>
-#include <WifiManager.h>
 
-bool        wifiConnected;
-WiFiManager wifiManager;
+#include "coap.h"
+#include "mdns.h"
+#include "wifi.h"
+
+void loop()
+{
+  coapLoop();
+
+  mdnsLoop();
+}
 
 void setup()
 {
   Serial.begin(115200);
 
-  wifiConnected = wifiManager.autoConnect();
-}
+  wifiSetup();
 
-void loop()
-{
+  coapSetup();
+
+  mdnsSetup();
 }

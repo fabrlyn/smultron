@@ -1,6 +1,6 @@
 # alpha
 
-A simple IoT device, based on NODEMCU v2, for my home 🏡.
+A simple IoT device, based on nodemcu v2, for my home 🏡.
 
 The device will simply report it's uptime, but does so with the help of a set of features which provide a foundation for building my home IoT devices.
 
@@ -18,7 +18,7 @@ The purpose of this project is to serve as a template.
 ### prerequisites
 
 - pio
-- NodeMCU v2
+- nodemcu v2
 
 ### building
 
@@ -36,7 +36,7 @@ pio run --target upload
 
 When flashing the device for the first time, or changing a router, the device will enter AP mode.
 
-- Connect to the AP, look for an AP called `alpha_<MAC_ADDRESS>`.
+- Connect to the AP, look for an AP called `alpha_<mac_address>`.
 - Visit `192.168.4.1` and a `WiFiManager` webpage should pop up.
 - Enter your credentials.
 

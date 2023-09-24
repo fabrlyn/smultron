@@ -40,6 +40,22 @@ When flashing the device for the first time, or changing a router, the device wi
 - Visit `192.168.4.1` and a `WiFiManager` webpage should pop up.
 - Enter your credentials.
 
+## assembly
+
+
+### onshape
+[cad project](https://cad.onshape.com/documents/0dfa4ee4d09bd93c2bde7585/w/f97345cb2106d2a261ad7e17/e/78e917287c298807d1374525?renderMode=0&uiState=650ff2563e0e525b6c274b7b)
+
+### instructions
+
+Glue the mount to the case.
+
+Insert the device and slide on the lid.
+
+![front](https://drive.google.com/uc?id=1owRORHNZ7k9dWp0mdpQ7rrQz7TY7Gl8q)
+![mount](https://drive.google.com/uc?id=1Pvh6fT73TNqiagfZO5_R0xJxPFTFdCwL)
+![case](https://drive.google.com/uc?id=1ol5IyqaGq1Yv376OKaLk9uhQuyTwHsqT)
+
 
 [^1]: may use custom resources but will have the intention to use regular ipso when suitable
 

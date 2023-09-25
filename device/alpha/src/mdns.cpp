@@ -12,6 +12,8 @@ void mdnsSetup()
   mdnsResponder = MDNSResponder();
 
   String mdnsName = "alpha_" + WiFi.macAddress();
+  mdnsName.replace(":", "-");
+  mdnsName.toLowerCase();
 
   while (!mdnsResponder.begin(mdnsName))
   {

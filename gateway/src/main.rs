@@ -1,6 +1,7 @@
 mod device;
 mod gateway;
 mod ipso;
+mod hub;
 
 use std::error::Error;
 

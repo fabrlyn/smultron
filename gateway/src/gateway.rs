@@ -1,4 +1,5 @@
 use crate::device::Device;
+use crate::hub::Hub;
 use crate::AppResult;
 
 use coapium::codec::url::Endpoint;
@@ -26,12 +27,15 @@ impl Gateway {
 
     pub async fn run(self) -> AppResult {
         select! {
-           result = self.discover() => {
-               result
+           result = Hub::new().run() => {
+            result
            }
-           result = self.poll() => {
-               result
-           }
+           //result = self.discover() => {
+           //    result
+           //}
+           //result = self.poll() => {
+           //    result
+           //}
         }
     }
 

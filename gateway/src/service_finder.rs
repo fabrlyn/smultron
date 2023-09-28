@@ -3,12 +3,13 @@ use std::{sync::Arc, time::Duration};
 use async_trait::async_trait;
 use ractor::{ActorProcessingErr, ActorRef, OutputPort};
 use tokio::{select, spawn, sync::oneshot};
-use tracing::warn;
+use tracing::{info, warn};
 
 use crate::service::{self, Service};
 
 pub type Actor = ActorRef<Msg>;
 pub type EventPort = Arc<OutputPort<Event>>;
+pub type StopSender = Option<oneshot::Sender<()>>;
 
 #[derive(Clone)]
 pub enum Event {
@@ -31,8 +32,9 @@ pub enum Msg {
 pub struct State {
     event_port: Option<EventPort>,
     services: Vec<Service>,
-    stop_sender: oneshot::Sender<()>,
+    stop_sender: StopSender,
 }
+
 
 impl State {
     fn find_by_service(&self, subject: &Service) -> Option<&Service> {
@@ -53,7 +55,7 @@ impl State {
     }
 
     fn emit_event(&self, event: Event) {
-        if let Some(event_port) = self.event_port {
+        if let Some(event_port) = &self.event_port {
             event_port.send(event);
         }
     }
@@ -77,11 +79,22 @@ async fn start(service_finder: ActorRef<Msg>) -> oneshot::Sender<()> {
 }
 
 fn stop(actor: Actor, state: &mut State) {
-    // TODO: Fix this with a shared boolean instead?
-    if let Err(e) = state.stop_sender.send(()) {
-        warn!("Failed to send stop for finder task {:?}", e);
-    }
+    stop_discovery(state);
+
     actor.stop(None);
+}
+
+fn stop_discovery(state: &mut State) {
+    info!("Stopping discovery");
+    let Some(stop_sender) = state.stop_sender.take() else {
+        info!("Discovery already stopped");
+        return;
+    };
+
+    if let Err(e) = stop_sender.send(()) {
+        warn!("Failed to send stop for discovery {:?}", e);
+    }
+    info!("Discovery stopped");
 }
 
 #[async_trait]
@@ -98,7 +111,7 @@ impl ractor::Actor for ServiceFinder {
         Ok(Self::State {
             event_port: arguments.event_port,
             services: vec![],
-            stop_sender: start(actor).await,
+            stop_sender: Some(start(actor).await),
         })
     }
 

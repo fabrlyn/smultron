@@ -1,63 +1,102 @@
 use std::time::Duration;
 
+use async_trait::async_trait;
 use futures_util::{pin_mut, StreamExt};
 use mdns::discover;
-use tokio::{sync::RwLock, time::interval};
-use tracing::info;
+use ractor::{Actor, ActorProcessingErr, ActorRef};
+use tokio::spawn;
+use tracing::{error, info};
 
-use crate::AppResult;
+use crate::service_finder::{self, ServiceFinder};
 
 const ONE_MINUTE: Duration = Duration::from_secs(10);
 const HUB_SERVICE: &'static str = "_smultron_hub._tcp.local";
 
-pub struct Hub {
-    client: RwLock<Option<async_nats::Client>>,
+#[derive(Debug)]
+pub struct Hub;
+
+pub struct WrappedState<S> {
+    state: S,
+}
+
+pub enum HubState {
+    Disconnected(ActorRef<service_finder::Msg>),
+    Connected(async_nats::Client),
+}
+
+async fn discover(hub: ActorRef<Message>) {
+    let discovery_stream = discover::all(HUB_SERVICE, ONE_MINUTE).unwrap().listen();
+    pin_mut!(discovery_stream);
+
+    let url = loop {
+        if let Some(Ok(service)) = discovery_stream.next().await {
+            if let Some(url) = on_discovered(service).await {
+                break url;
+            }
+        }
+    };
+
+    if let Err(e) = hub.send_message(Message::Connect(url.clone())) {
+        error!("Failed to send url {} to Hub actor: {}", url, e);
+    }
+}
+
+async fn on_discovered(discovered: mdns::Response) -> Option<String> {
+    info!("hub discovery: {:?}", discovered);
+    discovered.records().find_map(|record| match &record.kind {
+        mdns::RecordKind::SRV { port, target, .. } => Some(format!("{}:{}", target, port)),
+        _ => None,
+    })
+}
+
+#[derive(Debug)]
+pub enum Message {
+    Connect(String),
+}
+
+#[async_trait]
+impl Actor for Hub {
+    type Msg = Message;
+    type State = HubState;
+    type Arguments = ();
+
+    async fn pre_start(
+        &self,
+        actor: ActorRef<Self::Msg>,
+        _: (),
+    ) -> Result<Self::State, ActorProcessingErr> {
+        info!("Starting hub actor");
+
+        let (service_finder, _) = Actor::spawn_linked(
+            Some("hub_service_finder".to_owned()),
+            ServiceFinder,
+            HUB_SERVICE.to_owned().into(),
+            actor.into(),
+        )
+        .await?;
+
+        Ok(HubState::Disconnected(service_finder))
+    }
+
+    async fn handle(
+        &self,
+        _: ActorRef<Self::Msg>,
+        message: Message,
+        state: &mut Self::State,
+    ) -> Result<(), ActorProcessingErr> {
+        info!("Hub actor received message: {:?}", message);
+
+        Ok(())
+    }
 }
 
 impl Hub {
-    pub fn new() -> Self {
-        Self {
-            client: Default::default(),
-        }
-    }
+    async fn on_connect(&self, state: &mut WrappedState<HubState>, Message::Connect(url): Message) {
+        info!("Hub found, establishing connection to {}", url);
 
-    pub async fn run(self) -> AppResult {
-        self.discover().await
-    }
+        let client = async_nats::connect(url.clone()).await.unwrap();
+        state.state = HubState::Connected(client);
 
-    async fn discover(&self) -> AppResult {
-        info!("starting service discovery for {:?}", HUB_SERVICE);
-
-        let discovery_stream = discover::all(HUB_SERVICE, ONE_MINUTE)?.listen();
-        pin_mut!(discovery_stream);
-
-        let client = loop {
-            if let Some(Ok(service)) = discovery_stream.next().await {
-                if let Some(connection_string) = self.on_discovered(service).await {
-                    info!("found a hub: {}", connection_string);
-                    break async_nats::connect(connection_string).await;
-                }
-            }
-        }?;
-
-        self.client.write().await.replace(client);
-
-        self.publish().await
-    }
-
-    async fn publish(&self) -> AppResult {
-        let mut publish_ticker = interval(Duration::from_secs(10));
-
-        loop {
-            publish_ticker.tick().await;
-        }
-    }
-
-    async fn on_discovered(&self, discovered: mdns::Response) -> Option<String> {
-        info!("hub discovery: {:?}", discovered);
-        discovered.records().find_map(|record| match &record.kind {
-            mdns::RecordKind::SRV { port, target, .. } => Some(format!("{}:{}", target, port)),
-            _ => None,
-        })
+        info!("Hub connected to {}", url);
     }
 }

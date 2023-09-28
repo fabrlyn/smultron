@@ -26,21 +26,11 @@ impl Gateway {
     }
 
     pub async fn run(self) -> AppResult {
-        select! {
-           result = Hub::new().run() => {
-            result
-           }
-           //result = self.discover() => {
-           //    result
-           //}
-           //result = self.poll() => {
-           //    result
-           //}
-        }
+        self.poll().await
     }
 
     async fn poll(&self) -> AppResult {
-        let mut poll_interval = interval(Duration::from_secs(5));
+        let mut poll_interval = interval(Duration::from_secs(30));
 
         loop {
             println!("polling");

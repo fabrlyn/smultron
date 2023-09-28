@@ -1,14 +1,18 @@
 mod device;
 mod gateway;
-mod ipso;
 mod hub;
+mod ipso;
+mod service_finder;
+mod service;
 
 use std::error::Error;
 
+use ractor::Actor;
+use tokio::select;
 use tracing::info;
 use web_linking::links;
 
-use crate::gateway::Gateway;
+use crate::{gateway::Gateway, hub::Hub};
 
 type AppResult = Result<(), Box<dyn Error + Send + Sync + 'static>>;
 
@@ -26,7 +30,14 @@ async fn main() -> AppResult {
 
     info!("Starting gateway");
 
-    Gateway::new().run().await?;
+    let (_, hub_handle) = Actor::spawn(Some("hub".to_string()), Hub, ()).await?;
 
-    Ok(())
+    select! {
+        result = Gateway::new().run() => {
+            result
+        }
+        result = hub_handle => {
+            result.map_err(|e| e.into())
+        }
+    }
 }

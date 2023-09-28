@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Duration};
+use std::{fmt, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use ractor::{ActorProcessingErr, ActorRef, OutputPort};
@@ -11,9 +11,9 @@ pub type Actor = ActorRef<Msg>;
 pub type EventPort = Arc<OutputPort<Event>>;
 pub type StopSender = Option<oneshot::Sender<()>>;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Event {
-    Found(Service),
+    Found(Arc<Service>),
 }
 
 pub struct ServiceFinder;
@@ -24,6 +24,7 @@ pub struct Arguments {
     stop_after: Option<Duration>,
 }
 
+#[derive(Debug)]
 pub enum Msg {
     Found(Service),
     Stop,
@@ -31,38 +32,43 @@ pub enum Msg {
 
 pub struct State {
     event_port: Option<EventPort>,
-    services: Vec<Service>,
+    services: Vec<Arc<Service>>,
     stop_sender: StopSender,
 }
 
-
 impl State {
-    fn find_by_service(&self, subject: &Service) -> Option<&Service> {
-        self.services.iter().find(|service| *service == subject)
+    fn emit_event(&self, event: Event) {
+        if let Some(event_port) = &self.event_port {
+            info!("Emitting event {:?}", event);
+            event_port.send(event);
+        }
     }
 
-    fn put_service(&mut self, service: Service) -> bool {
+    fn find_by_service(&self, subject: &Service) -> Option<&Arc<Service>> {
+        self.services
+            .iter()
+            .find(|service| service.as_ref() == subject)
+    }
+
+    fn put_service(&mut self, service: Service) -> Option<Arc<Service>> {
         if self.service_exists(&service) {
-            return false;
+            return None;
         }
 
-        self.services.push(service);
-        true
+        let service = Arc::new(service);
+        self.services.push(service.clone());
+
+        Some(service)
     }
 
     fn service_exists(&self, service: &Service) -> bool {
         self.find_by_service(service).is_some()
     }
-
-    fn emit_event(&self, event: Event) {
-        if let Some(event_port) = &self.event_port {
-            event_port.send(event);
-        }
-    }
 }
 
 fn found(state: &mut State, service: Service) {
-    if state.put_service(service.clone()) {
+    if let Some(service) = state.put_service(service.clone()) {
+        info!("Service found {:?}", service);
         state.emit_event(Event::Found(service))
     }
 }
@@ -79,6 +85,8 @@ async fn start(service_finder: ActorRef<Msg>) -> oneshot::Sender<()> {
 }
 
 fn stop(actor: Actor, state: &mut State) {
+    info!("Stopping service finder");
+
     stop_discovery(state);
 
     actor.stop(None);
@@ -108,6 +116,8 @@ impl ractor::Actor for ServiceFinder {
         actor: ActorRef<Self::Msg>,
         arguments: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
+        info!("Starting service finder with arguments {:?}", arguments);
+
         Ok(Self::State {
             event_port: arguments.event_port,
             services: vec![],
@@ -121,6 +131,8 @@ impl ractor::Actor for ServiceFinder {
         message: Self::Msg,
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
+        info!("Handling message {:?}", message);
+
         match message {
             Msg::Found(service) => found(state, service),
             Msg::Stop => stop(actor, state),
@@ -137,5 +149,15 @@ impl From<service::Name> for Arguments {
             stop_after: None,
             name,
         }
+    }
+}
+
+impl fmt::Debug for Arguments {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Arguments")
+            .field("event_port", &self.event_port.is_some())
+            .field("name", &self.name)
+            .field("stop_after", &self.stop_after)
+            .finish()
     }
 }

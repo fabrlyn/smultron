@@ -20,7 +20,7 @@ pub struct WrappedState<S> {
 }
 
 pub enum HubState {
-    Disconnected(ActorRef<service_finder::Msg>),
+    Disconnected(ActorRef<()>),
     Connected(async_nats::Client),
 }
 

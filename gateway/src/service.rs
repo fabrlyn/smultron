@@ -6,10 +6,10 @@ pub type SocketAddress = String;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Service {
-    found_at: Instant,
-    name: String,
-    port: Port,
-    target: String,
+    pub found_at: Instant,
+    pub name: String,
+    pub port: Port,
+    pub target: String,
 }
 
 impl Service {

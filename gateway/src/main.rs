@@ -5,18 +5,21 @@ mod hub;
 mod ipso;
 mod service;
 mod service_finder;
+mod timeout;
 
 use std::error::Error;
 
-use async_trait::async_trait;
-use debugger::Debugger;
-use ractor::{Actor, ActorProcessingErr, ActorRef, OutputPort};
-use service_finder::{EventPort, ServiceFinder};
+use ractor::{Actor, OutputPort};
 use tokio::select;
 use tracing::info;
 use web_linking::links;
 
-use crate::{gateway::Gateway, hub::Hub};
+use crate::{
+    debugger::Debugger,
+    gateway::Gateway,
+    hub::Hub,
+    service_finder::{Port, ServiceFinder},
+};
 
 type AppResult = Result<(), Box<dyn Error + Send + Sync + 'static>>;
 
@@ -50,13 +53,13 @@ async fn real_main() -> AppResult {
 }
 
 async fn test_service_finder() -> AppResult {
-    let port = EventPort::new(OutputPort::default());
+    let port: service_finder::BroadcastPort = Default::default();
 
-    let (service_finder, service_finder_handle) = Actor::spawn(
+    let (service_finder, _) = Actor::spawn(
         Some("service_finder".to_owned()),
         ServiceFinder,
         service_finder::Arguments {
-            event_port: Some(port.clone()),
+            port: Some(Port::Broadcast(port.clone())),
             name: "_companion-link._tcp.local".to_owned(),
         },
     )

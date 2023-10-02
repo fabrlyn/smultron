@@ -4,7 +4,6 @@ use async_trait::async_trait;
 use futures_util::{pin_mut, StreamExt};
 use mdns::discover;
 use ractor::{Actor, ActorProcessingErr, ActorRef};
-use tokio::spawn;
 use tracing::{error, info};
 
 use crate::service_finder::{self, ServiceFinder};
@@ -20,7 +19,7 @@ pub struct WrappedState<S> {
 }
 
 pub enum HubState {
-    Disconnected(ActorRef<()>),
+    Disconnected(service_finder::Actor),
     Connected(async_nats::Client),
 }
 
@@ -70,7 +69,10 @@ impl Actor for Hub {
         let (service_finder, _) = Actor::spawn_linked(
             Some("hub_service_finder".to_owned()),
             ServiceFinder,
-            HUB_SERVICE.to_owned().into(),
+            service_finder::Arguments {
+                port: None,
+                name: HUB_SERVICE.to_owned(),
+            },
             actor.into(),
         )
         .await?;

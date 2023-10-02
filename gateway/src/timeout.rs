@@ -1,34 +1,36 @@
+use std::time::Duration;
+
 use async_trait::async_trait;
 use ractor::{ActorProcessingErr, ActorRef};
+use tokio::time::sleep;
 use tracing::info;
 
-use crate::service_finder;
-
-pub struct Debugger;
+pub struct Timeout;
 
 #[async_trait]
-impl ractor::Actor for Debugger {
-    type Arguments = service_finder::Actor;
-    type Msg = String;
-    type State = service_finder::Actor;
+impl ractor::Actor for Timeout {
+    type Arguments = ();
+    type Msg = ();
+    type State = ();
 
     async fn pre_start(
         &self,
-        _: ActorRef<Self::Msg>,
+        a: ActorRef<Self::Msg>,
         arguments: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
+        a.send_message(())?;
         Ok(arguments)
     }
 
     async fn handle(
         &self,
         _: ActorRef<Self::Msg>,
-        msg: Self::Msg,
-        state: &mut Self::State,
+        _: Self::Msg,
+        _: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
-        info!("__-- Debugger --__\n{}", msg);
-
-        state.stop(None);
+        info!("sleeping");
+        sleep(Duration::from_secs(10)).await;
+        info!("done sleeping");
 
         Ok(())
     }

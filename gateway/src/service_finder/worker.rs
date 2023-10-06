@@ -5,9 +5,11 @@ use crate::{
 };
 use async_trait::async_trait;
 use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort};
-use std::{fmt, sync::Arc};
-use tokio::{spawn, sync::oneshot};
+use std::{fmt, sync::Arc, time::Duration};
+use tokio::{spawn, sync::oneshot, time::sleep};
 use tracing::{error, info, warn};
+
+pub const DEFAULT_INTERVAL: Duration = Duration::from_secs(30);
 
 pub type Actor = ActorRef<Msg>;
 
@@ -17,6 +19,8 @@ pub type GetTx = RpcReplyPort<Vec<Arc<Service>>>;
 pub struct Arguments {
     pub name: service::Name,
     pub port: Option<super::Port>,
+    pub interval: Option<Duration>,
+    pub timeout: Option<Duration>,
 }
 
 #[derive(Debug)]
@@ -98,7 +102,19 @@ impl Worker {
         info!("Starting worker with arguments {:?}", arguments);
 
         let (stop_tx, stop_rx) = oneshot::channel();
-        spawn(task::start(actor, stop_rx, arguments.name));
+        spawn(task::start(
+            actor.clone(),
+            stop_rx,
+            arguments.name,
+            arguments.interval.unwrap_or(DEFAULT_INTERVAL),
+        ));
+
+        if let Some(timeout) = arguments.timeout {
+            spawn(async move {
+                sleep(timeout).await;
+                actor.stop(None);
+            });
+        }
 
         Ok(State {
             stop_tx: Some(stop_tx),

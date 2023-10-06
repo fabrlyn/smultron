@@ -1,7 +1,7 @@
 mod worker;
 
-use std::error::Error;
 use std::sync::Arc;
+use std::{error::Error, time::Duration};
 
 use async_trait::async_trait;
 use ractor::{call, ActorProcessingErr, ActorRef, SupervisionEvent};
@@ -133,6 +133,8 @@ async fn start_finder(actor: Actor) {
     let arguments = service_finder::Arguments {
         name: HUB_SERVICE.to_owned(),
         port: Some(service_finder::Port::Reply(tx.into())),
+        interval: Some(Duration::from_secs(12)),
+        timeout: Some(Duration::from_secs(30)),
     };
     ractor::Actor::spawn(
         Some("hub_service_finder".to_owned()),

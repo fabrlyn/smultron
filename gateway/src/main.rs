@@ -77,6 +77,8 @@ async fn test_service_finder() -> AppResult {
             //port: Some(Port::Broadcast(port.clone())),
             port: Some(Port::Reply(port)),
             name: "_coap._udp.local".to_owned(),
+            interval: Some(Duration::from_secs(12)),
+            timeout: Some(Duration::from_secs(30)),
         },
         debugger.clone().into(),
     )

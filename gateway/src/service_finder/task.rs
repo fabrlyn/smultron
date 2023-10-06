@@ -54,9 +54,9 @@ fn on_next(actor: &Actor, response: Option<Response>) -> bool {
     false
 }
 
-pub async fn start(actor: Actor, stop_rx: StopRx, name: Name) {
+pub async fn start(actor: Actor, stop_rx: StopRx, name: Name, interval: Duration) {
     info!("Starting service discovery");
-    let Ok(discovery) = discover::all(name, Duration::from_secs(15)) else {
+    let Ok(discovery) = discover::all(name, interval) else {
         return;
     };
 

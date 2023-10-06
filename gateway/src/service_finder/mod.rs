@@ -17,6 +17,7 @@ use async_trait::async_trait;
 use ractor::{call, ActorProcessingErr, ActorRef, SupervisionEvent};
 use std::error::Error;
 use std::sync::Arc;
+use std::time::Duration;
 use tracing::info;
 
 pub type Actor = ActorRef<Msg>;
@@ -25,6 +26,8 @@ pub type Actor = ActorRef<Msg>;
 pub struct Arguments {
     pub name: service::Name,
     pub port: Option<Port>,
+    pub interval: Option<Duration>,
+    pub timeout: Option<Duration>,
 }
 
 #[derive(Debug)]
@@ -77,6 +80,8 @@ impl ServiceFinder {
             worker::Arguments {
                 port: arguments.port,
                 name: arguments.name,
+                interval: arguments.interval,
+                timeout: arguments.timeout,
             },
             actor.into(),
         )

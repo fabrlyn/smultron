@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use async_nats::client::Client;
 use async_trait::async_trait;
@@ -22,7 +22,14 @@ impl Worker {
     async fn connect(service: Arc<Service>) -> Result<State, ActorProcessingErr> {
         info!("Connecting to {}", service.socket_address());
 
-        let client = async_nats::connect(service.socket_address()).await.unwrap();
+        let client = async_nats::ConnectOptions::new()
+            .ping_interval(Duration::from_secs(10))
+            .event_callback(|event| async move {
+                info!("NATS event: {:?}", event);
+            })
+            .connect(service.socket_address())
+            .await
+            .unwrap();
 
         info!("Connected to {}", service.socket_address());
 

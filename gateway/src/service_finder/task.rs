@@ -1,18 +1,16 @@
-use std::{
-    future::ready,
-    time::{Duration, Instant},
-};
-
-use futures_util::{pin_mut, StreamExt};
-use mdns::{discover, Response};
-use tokio::{pin, select, sync::oneshot};
-
+use super::worker::Actor;
 use crate::{
     service::{Name, Service},
     service_finder::worker::Msg,
 };
-
-use super::worker::Actor;
+use futures_util::{pin_mut, StreamExt};
+use mdns::{discover, Response};
+use std::{
+    future::ready,
+    time::{Duration, Instant},
+};
+use tokio::{pin, select, sync::oneshot};
+use tracing::{error, info};
 
 pub type StopRx = oneshot::Receiver<()>;
 pub type StopTx = oneshot::Sender<()>;
@@ -38,14 +36,26 @@ fn on_next(actor: &Actor, response: Option<Response>) -> bool {
         return true;
     };
 
+    info!(
+        "Received response for ip {:?} and/or host {:?} with port {:?}",
+        response.ip_addr(),
+        response.hostname(),
+        response.port()
+    );
+
     for service in find_services(response) {
-        actor.send_message(Msg::Found(service));
+        info!("Sending found service to actor {:?}", service);
+        if let Err(e) = actor.send_message(Msg::Found(service)) {
+            error!("Failed to send found service {:?}", e);
+        }
+        info!("Sent found service to actor");
     }
 
     false
 }
 
 pub async fn start(actor: Actor, stop_rx: StopRx, name: Name) {
+    info!("Starting service discovery");
     let Ok(discovery) = discover::all(name, Duration::from_secs(15)) else {
         return;
     };
@@ -62,7 +72,10 @@ pub async fn start(actor: Actor, stop_rx: StopRx, name: Name) {
         };
 
         if should_stop {
-            actor.send_message(Msg::TaskStopping);
+            info!("Shutting down service discovery");
+            if let Err(e) = actor.send_message(Msg::TaskStopping) {
+                info!("Failed to send task stopping to actor {:?}", e);
+            }
             return;
         }
     }

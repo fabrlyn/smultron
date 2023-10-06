@@ -1,8 +1,6 @@
-use std::{fmt, sync::Arc};
-
-use ractor::RpcReplyPort;
-
 use crate::service::Service;
+use ractor::RpcReplyPort;
+use std::{fmt, sync::Arc};
 
 pub type BroadcastPort = Arc<ractor::OutputPort<Event>>;
 pub type ReplyPort = RpcReplyPort<Arc<Service>>;
@@ -14,15 +12,14 @@ pub enum Event {
 
 pub enum Port {
     Broadcast(BroadcastPort),
-    Reply(Option<ReplyPort>),
+    Reply(ReplyPort),
 }
 
 impl fmt::Debug for Port {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Port::Broadcast(_) => write!(f, "Broadcast"),
-            Port::Reply(Some(_)) => write!(f, "Reply(Some)"),
-            Port::Reply(None) => write!(f, "Reply(None)"),
+            Port::Reply(_) => write!(f, "Reply"),
         }
     }
 }

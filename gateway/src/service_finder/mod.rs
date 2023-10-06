@@ -6,60 +6,70 @@ pub use port::BroadcastPort;
 pub use port::Event;
 pub use port::Port;
 pub use port::ReplyPort;
-
-use std::sync::Arc;
-
-use async_trait::async_trait;
-use ractor::{call, ActorProcessingErr, ActorRef, SupervisionEvent};
-use tracing::info;
+use ractor::actor::messages::BoxedState;
+use ractor::ActorCell;
 
 use crate::{
     service::{self, Service},
     service_finder::worker::Worker,
 };
+use async_trait::async_trait;
+use ractor::{call, ActorProcessingErr, ActorRef, SupervisionEvent};
+use std::error::Error;
+use std::sync::Arc;
+use tracing::info;
 
 pub type Actor = ActorRef<Msg>;
 
-pub struct ServiceFinder;
-
 #[derive(Debug)]
 pub struct Arguments {
-    pub port: Option<Port>,
     pub name: service::Name,
+    pub port: Option<Port>,
 }
 
 #[derive(Debug)]
-pub enum Msg {
-    Stop,
-}
+pub enum Msg {}
 
-pub struct State {
-    worker: worker::Actor,
-    services: Vec<Arc<Service>>,
-}
+pub struct ServiceFinder;
 
-impl State {
-    fn stop(&self) {
-        info!("Stopping worker");
+impl ServiceFinder {
+    fn handle_supervisor_evt(
+        actor: Actor,
+        state: &mut State,
+        event: SupervisionEvent,
+    ) -> Result<(), ActorProcessingErr> {
+        info!("Handling {:?}", event);
 
-        self.worker.stop(None);
-
-        info!("Stopping worker");
+        use SupervisionEvent::*;
+        match event {
+            ActorTerminated(link_actor, link_state, _) => {
+                link_terminated(actor, state, link_actor, link_state)
+            }
+            ActorPanicked(link_actor, error) => link_panicked(link_actor, error),
+            _ => {}
+        }
+        info!("Handled event");
+        Ok(())
     }
-}
 
-#[async_trait]
-impl ractor::Actor for ServiceFinder {
-    type Arguments = Arguments;
-    type Msg = Msg;
-    type State = State;
+    async fn post_stop(state: &mut State) -> Result<(), ActorProcessingErr> {
+        info!("Stopping service finder");
 
-    async fn pre_start(
-        &self,
-        actor: ActorRef<Self::Msg>,
-        arguments: Self::Arguments,
-    ) -> Result<Self::State, ActorProcessingErr> {
-        info!("Starting service finder with arguments {:?}", arguments);
+        if state.services.is_empty() {
+            info!("Getting services from worker");
+            if let Ok(services) = call!(state.worker, worker::Msg::Get) {
+                info!("Got services: {:?}", services);
+                state.services = services;
+            }
+        }
+
+        state.stop();
+
+        Ok(())
+    }
+
+    async fn pre_start(actor: Actor, arguments: Arguments) -> Result<State, ActorProcessingErr> {
+        info!("Starting service finder with {:?}", arguments);
 
         let (worker, _) = ractor::Actor::spawn_linked(
             None,
@@ -72,19 +82,68 @@ impl ractor::Actor for ServiceFinder {
         )
         .await?;
 
-        Ok(Self::State {
+        Ok(State {
             worker,
             services: vec![],
         })
     }
+}
+
+#[derive(Clone, Debug)]
+pub struct State {
+    worker: worker::Actor,
+
+    pub services: Vec<Arc<Service>>,
+}
+
+impl State {
+    fn merge(&mut self, state: &mut BoxedState) {
+        let Ok(state) = state.take::<worker::State>() else {
+            return;
+        };
+
+        self.services = state.services;
+    }
+
+    fn stop(&self) {
+        info!("Stopping worker");
+
+        self.worker.stop(None);
+
+        info!("Stopped worker");
+    }
+}
+
+fn link_terminated(
+    actor: Actor,
+    state: &mut State,
+    link_actor: ActorCell,
+    link_state: Option<BoxedState>,
+) {
+    info!("Linked actor terminated {:?}", actor);
+    if let Some(mut link_state) = link_state {
+        state.merge(&mut link_state);
+    }
+
+    actor.stop(None);
+}
+
+fn link_panicked(actor: ActorCell, error: Box<dyn Error>) {
+    panic!("Linked actor {:?} panicked{:?}", actor, error);
+}
+
+#[async_trait]
+impl ractor::Actor for ServiceFinder {
+    type Arguments = Arguments;
+    type Msg = Msg;
+    type State = State;
 
     async fn handle(
         &self,
         _: ActorRef<Self::Msg>,
-        message: Self::Msg,
+        _: Self::Msg,
         _: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
-        info!("Handling message {:?}", message);
         Ok(())
     }
 
@@ -94,26 +153,7 @@ impl ractor::Actor for ServiceFinder {
         event: SupervisionEvent,
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
-        info!("Handling supervision event {:?}", event);
-
-        match event {
-            SupervisionEvent::ActorTerminated(_, worker_state, _) => {
-                let result = match worker_state {
-                    Some(mut worker_state) => {
-                        let services = worker_state.take::<worker::State>().unwrap().services;
-                        state.services = services;
-                        Ok(())
-                    }
-                    None => Ok(()),
-                };
-
-                actor.stop(None);
-
-                result
-            }
-            SupervisionEvent::ActorPanicked(_, e) => panic!("{:?}", e),
-            _ => Ok(()),
-        }
+        ServiceFinder::handle_supervisor_evt(actor, state, event)
     }
 
     async fn post_stop(
@@ -121,17 +161,14 @@ impl ractor::Actor for ServiceFinder {
         _: ActorRef<Self::Msg>,
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
-        info!("Stopping service finder");
+        ServiceFinder::post_stop(state).await
+    }
 
-        if state.services.is_empty() {
-            info!("Getting found services from worker");
-            if let Ok(services) = call!(state.worker, worker::Msg::Get) {
-                state.services = services;
-            }
-        }
-
-        state.stop();
-
-        Ok(())
+    async fn pre_start(
+        &self,
+        actor: ActorRef<Self::Msg>,
+        arguments: Self::Arguments,
+    ) -> Result<Self::State, ActorProcessingErr> {
+        ServiceFinder::pre_start(actor, arguments).await
     }
 }

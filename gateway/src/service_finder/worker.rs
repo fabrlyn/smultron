@@ -1,28 +1,22 @@
-use std::sync::Arc;
-
-use async_trait::async_trait;
-use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort};
-use tokio::{spawn, sync::oneshot};
-use tracing::{info, warn};
-
+use super::{port::BroadcastPort, Event, ReplyPort};
 use crate::{
     service::{self, Service},
     service_finder::task,
 };
-
-use super::{
-    port::{BroadcastPort, ReplyPort},
-    Event, Port,
-};
+use async_trait::async_trait;
+use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort};
+use std::{fmt, sync::Arc};
+use tokio::{spawn, sync::oneshot};
+use tracing::{error, info, warn};
 
 pub type Actor = ActorRef<Msg>;
 
-pub struct Worker;
+pub type GetTx = RpcReplyPort<Vec<Arc<Service>>>;
 
 #[derive(Debug)]
 pub struct Arguments {
     pub name: service::Name,
-    pub port: Option<Port>,
+    pub port: Option<super::Port>,
 }
 
 #[derive(Debug)]
@@ -32,33 +26,24 @@ pub enum Msg {
     TaskStopping,
 }
 
+enum Port {
+    Broadcast(BroadcastPort),
+    Reply(Option<ReplyPort>),
+}
+
 #[derive(Debug)]
 pub struct State {
-    name: service::Name,
     port: Option<Port>,
+    stop_tx: Option<task::StopTx>,
+
     pub services: Vec<Arc<Service>>,
-    stop_tx: task::StopTx,
 }
 
 impl State {
-    fn emit_event(&self, event: Event) {
-        if let Some(Port::Broadcast(port)) = &self.port {
-            info!("Emitting event {:?}", event);
-            port.send(event);
-        }
-    }
-
     fn find_by_service(&self, subject: &Service) -> Option<&Arc<Service>> {
         self.services
             .iter()
             .find(|service| service.as_ref() == subject)
-    }
-
-    fn is_done(&self) -> bool {
-        match self.port {
-            Some(Port::Reply(None)) => true,
-            _ => false,
-        }
     }
 
     fn put_service(&mut self, service: Service) -> Option<Arc<Service>> {
@@ -72,34 +57,64 @@ impl State {
         Some(service)
     }
 
-    fn send(&mut self, actor: &Actor, service: Arc<Service>) {
-        match &mut self.port {
-            Some(Port::Reply(port)) => reply(actor, self, port, service),
-            Some(Port::Broadcast(port)) => broadcast(port, Event::Found(service)),
-            None => return,
-        }
-    }
-
     fn service_exists(&self, service: &Service) -> bool {
         self.find_by_service(service).is_some()
     }
+}
 
-    fn stop(&self, actor: &Actor) {
-        info!("Stopping worker");
+pub struct Worker;
 
-        self.stop_task();
+impl Worker {
+    fn found(actor: Actor, state: &mut State, service: Service) {
+        let Some(service) = state.put_service(service.clone()) else {
+            return;
+        };
 
-        actor.stop(None);
-        info!("Stopped worker");
+        info!("Service found {:?}", service);
+        send(actor, state, service);
     }
 
-    fn stop_task(&self) {
-        info!("Stopping task");
-        if let Err(_) = self.stop_tx.send(()) {
-            info!("Stopping task failed, could already be stopped");
-        } else {
-            info!("Stopped task");
+    fn get(state: &mut State, get_tx: GetTx) {
+        if let Err(e) = get_tx.send(state.services.clone()) {
+            warn!("Failed to send on get tx: {:?}", e);
         }
+    }
+
+    fn handle(actor: Actor, state: &mut State, msg: Msg) -> Result<(), ActorProcessingErr> {
+        info!("Handle message {:?}", msg);
+
+        use Msg::*;
+        match msg {
+            Found(service) => Self::found(actor, state, service),
+            TaskStopping => Self::stop(actor, state),
+            Get(tx) => Self::get(state, tx),
+        }
+
+        info!("Handled message");
+        Ok(())
+    }
+
+    fn pre_start(actor: Actor, arguments: Arguments) -> Result<State, ActorProcessingErr> {
+        info!("Starting worker with arguments {:?}", arguments);
+
+        let (stop_tx, stop_rx) = oneshot::channel();
+        spawn(task::start(actor, stop_rx, arguments.name));
+
+        Ok(State {
+            stop_tx: Some(stop_tx),
+            port: arguments.port.map(Into::into),
+            services: vec![],
+        })
+    }
+
+    fn stop(actor: Actor, state: &mut State) {
+        info!("Stopping worker");
+
+        stop_task(&mut state.stop_tx);
+
+        actor.stop(None);
+
+        info!("Stopped worker");
     }
 }
 
@@ -108,23 +123,48 @@ fn broadcast(port: &BroadcastPort, event: Event) {
     port.send(event);
 }
 
-fn found(actor: &Actor, state: &mut State, service: Service) {
-    if let Some(service) = state.put_service(service.clone()) {
-        info!("Service found {:?}", service);
-        state.send(actor, service);
+fn reply(actor: Actor, state: &mut State, service: Arc<Service>) {
+    info!("Replying with found service {:?}", service);
+
+    let Some(Port::Reply(Some(port))) = state.port.take() else {
+        error!(
+            "Failed to reply, expected reply port but got {:?}",
+            state.port
+        );
+        return;
     };
+
+    if let Err(e) = port.send(service) {
+        warn!("Failed to reply with found service: {:?}", e);
+    } else {
+        info!("Replied to port");
+    }
+
+    Worker::stop(actor, state);
 }
 
-fn reply(actor: &Actor, state: &mut State, port: &mut Option<ReplyPort>, service: Arc<Service>) {
-    if let Some(port) = port.take() {
-        info!("Replying to port");
-        if let Err(e) = port.send(service) {
-            warn!("Failed to reply with found service");
-        } else {
-            info!("Replied to port");
-        }
-        state.stop(actor);
+fn send(actor: Actor, state: &mut State, service: Arc<Service>) {
+    match &state.port {
+        Some(Port::Reply(_)) => reply(actor, state, service),
+        Some(Port::Broadcast(port)) => broadcast(port, Event::Found(service)),
+        None => return,
     }
+}
+
+fn stop_task(stop_tx: &mut Option<task::StopTx>) {
+    info!("Stopping task");
+
+    let Some(stop_tx) = stop_tx.take() else {
+        info!("Task already stopped");
+        return;
+    };
+
+    if let Err(e) = stop_tx.send(()) {
+        info!("Failed to stop task {:?}", e);
+        return;
+    }
+
+    info!("Stopped task");
 }
 
 #[async_trait]
@@ -139,15 +179,7 @@ impl ractor::Actor for Worker {
         msg: Self::Msg,
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
-        info!("Handle message {:?}", msg);
-
-        match msg {
-            Msg::Found(service) => found(&actor, state, service),
-            Msg::TaskStopping => state.stop(&actor),
-        }
-
-        info!("Handled message");
-        Ok(())
+        Worker::handle(actor, state, msg)
     }
 
     async fn pre_start(
@@ -155,17 +187,25 @@ impl ractor::Actor for Worker {
         actor: Actor,
         arguments: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        info!("Starting worker with arguments {:?}", arguments);
+        Worker::pre_start(actor, arguments)
+    }
+}
 
-        let (stop_tx, stop_rx) = oneshot::channel();
+impl From<super::Port> for Port {
+    fn from(value: super::Port) -> Self {
+        match value {
+            super::Port::Broadcast(port) => Self::Broadcast(port),
+            super::Port::Reply(port) => Self::Reply(Some(port)),
+        }
+    }
+}
 
-        spawn(async { task::start(actor, stop_rx, arguments.name) });
-
-        Ok(Self::State {
-            stop_tx,
-            port: arguments.port,
-            services: vec![],
-            name: arguments.name,
-        })
+impl fmt::Debug for Port {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Port::Broadcast(_) => write!(f, "Broadcast"),
+            Port::Reply(Some(_)) => write!(f, "Reply(Some)"),
+            Port::Reply(None) => write!(f, "Reply(None)"),
+        }
     }
 }

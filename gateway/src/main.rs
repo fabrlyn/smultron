@@ -1,5 +1,6 @@
 mod debugger;
 mod device;
+mod device_manager;
 mod gateway;
 mod hub;
 mod ipso;
@@ -35,8 +36,8 @@ type AppResult = Result<(), Box<dyn Error + Send + Sync + 'static>>;
 #[tokio::main]
 async fn main() -> AppResult {
     tracing_subscriber::fmt().try_init()?;
-    //test_service_finder().await
-    test_hub().await
+    test_service_finder().await
+    //test_hub().await
 }
 
 async fn real_main() -> AppResult {
@@ -66,28 +67,28 @@ async fn test_service_finder() -> AppResult {
     let (debugger, debugger_handle) =
         Actor::spawn(Some("debugger".to_owned()), Debugger, ()).await?;
 
-    //let port: service_finder::BroadcastPort = Default::default();
-    let (tx, rx) = oneshot::channel();
-    let port = tx.into();
+    let port: service_finder::BroadcastPort = Default::default();
+    //let (tx, rx) = oneshot::channel();
+    //let port = tx.into();
 
     let (service_finder, _) = Actor::spawn_linked(
         Some("service_finder".to_owned()),
         ServiceFinder,
         service_finder::Arguments {
-            //port: Some(Port::Broadcast(port.clone())),
-            port: Some(Port::Reply(port)),
+            port: Some(Port::Broadcast(port.clone())),
+            //port: Some(Port::Reply(port)),
             name: "_coap._udp.local".to_owned(),
-            interval: Some(Duration::from_secs(12)),
-            timeout: Some(Duration::from_secs(30)),
+            interval: Some(Duration::from_secs(10)),
+            timeout: Some(Duration::from_secs(300)),
         },
         debugger.clone().into(),
     )
     .await?;
 
-    //port.subscribe(debugger, |msg| Some(format!("{:#?}", msg)));
+    port.subscribe(debugger, |msg| Some(format!("{:#?}", msg)));
 
-    let msg = rx.await.unwrap();
-    debugger.send_message(format!("{:#?}", msg)).unwrap();
+    //let msg = rx.await.unwrap();
+    //debugger.send_message(format!("{:#?}", msg)).unwrap();
 
     select! {
         result = debugger_handle => {

@@ -4,6 +4,7 @@ use crate::{
     service_finder::worker::Msg,
 };
 use futures_util::{pin_mut, StreamExt};
+use libarp::client::ArpClient;
 use mdns::{discover, Response};
 use std::{
     future::ready,
@@ -31,7 +32,7 @@ fn into_service(record: &mdns::Record) -> Option<Service> {
     }
 }
 
-fn on_next(actor: &Actor, response: Option<Response>) -> bool {
+async fn on_next(actor: &Actor, response: Option<Response>) -> bool {
     let Some(response) = response else {
         return true;
     };
@@ -67,7 +68,7 @@ pub async fn start(actor: Actor, stop_rx: StopRx, name: Name, interval: Duration
 
     loop {
         let should_stop = select! {
-            result = stream.next() => on_next(&actor, result),
+            result = stream.next() => on_next(&actor, result).await,
             _ = &mut stop_rx => true
         };
 

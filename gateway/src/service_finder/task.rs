@@ -4,7 +4,7 @@ use crate::{
     service_finder::worker::Msg,
 };
 use futures_util::{pin_mut, StreamExt};
-use libarp::client::ArpClient;
+
 use mdns::{discover, Response};
 use std::{
     future::ready,

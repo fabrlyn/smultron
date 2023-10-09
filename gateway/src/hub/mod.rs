@@ -80,7 +80,7 @@ impl Hub {
         Ok(())
     }
 
-    async fn publish(actor: Actor, state: &mut State, subject: String, payload: Vec<u8>) {
+    async fn publish(_actor: Actor, state: &mut State, subject: String, payload: Vec<u8>) {
         let InnerState::Connected(worker) = &state.state else {
             return;
         };

@@ -71,7 +71,7 @@ async fn test_service_finder() -> AppResult {
     //let (tx, rx) = oneshot::channel();
     //let port = tx.into();
 
-    let (service_finder, _) = Actor::spawn_linked(
+    let (_service_finder, _) = Actor::spawn_linked(
         Some("service_finder".to_owned()),
         ServiceFinder,
         service_finder::Arguments {
@@ -121,7 +121,7 @@ async fn test_device() -> AppResult {
 
     let port: device::EventPort = Default::default();
 
-    let (device, _) = Actor::spawn_linked(
+    let (_device, _) = Actor::spawn_linked(
         Some("service_finder".to_owned()),
         Device,
         device::Arguments {

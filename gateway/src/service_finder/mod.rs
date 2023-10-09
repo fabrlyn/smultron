@@ -122,7 +122,7 @@ impl State {
 fn link_terminated(
     actor: Actor,
     state: &mut State,
-    link_actor: ActorCell,
+    _link_actor: ActorCell,
     link_state: Option<BoxedState>,
 ) {
     info!("Linked actor terminated {:?}", actor);

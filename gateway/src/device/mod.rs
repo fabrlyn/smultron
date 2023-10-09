@@ -19,7 +19,6 @@ use coapium::{
     asynchronous::{default_parameters, default_reliability, Client},
     codec::{message::GetOptions, url::Endpoint},
     protocol::{get::Get, new_request::NewRequest, ping::Ping},
-    synchronous::ping,
 };
 use ractor::{ActorProcessingErr, ActorRef, OutputPort};
 use web_linking::links;

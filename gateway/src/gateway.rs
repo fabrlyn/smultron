@@ -1,12 +1,12 @@
 use crate::device::Device;
-use crate::hub::Hub;
+
 use crate::AppResult;
 
 use coapium::codec::url::Endpoint;
 use futures_util::{pin_mut, StreamExt};
 use mdns::{discover, RecordKind};
 use std::time::Duration;
-use tokio::select;
+
 use tokio::sync::RwLock;
 use tokio::time::interval;
 use tracing::info;
@@ -35,7 +35,7 @@ impl Gateway {
         loop {
             println!("polling");
             poll_interval.tick().await;
-            for device in self.devices.read().await.iter() {
+            for _device in self.devices.read().await.iter() {
                 //device.poll().await;
             }
         }
@@ -73,12 +73,12 @@ impl Gateway {
         self.register_device(endpoint).await;
     }
 
-    async fn register_device(&self, endpoint: Endpoint) {
+    async fn register_device(&self, _endpoint: Endpoint) {
         //let device = Device::new(endpoint).await.unwrap();
         //self.devices.write().await.push(device);
     }
 
-    async fn device_by_endpoint_exist(&self, endpoint: &Endpoint) -> bool {
+    async fn device_by_endpoint_exist(&self, _endpoint: &Endpoint) -> bool {
         todo!()
         //self.devices
         //    .read()

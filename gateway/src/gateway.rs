@@ -36,7 +36,7 @@ impl Gateway {
             println!("polling");
             poll_interval.tick().await;
             for device in self.devices.read().await.iter() {
-                device.poll().await;
+                //device.poll().await;
             }
         }
     }
@@ -74,17 +74,18 @@ impl Gateway {
     }
 
     async fn register_device(&self, endpoint: Endpoint) {
-        let device = Device::new(endpoint).await.unwrap();
-        self.devices.write().await.push(device);
+        //let device = Device::new(endpoint).await.unwrap();
+        //self.devices.write().await.push(device);
     }
 
     async fn device_by_endpoint_exist(&self, endpoint: &Endpoint) -> bool {
-        self.devices
-            .read()
-            .await
-            .iter()
-            .find(|d| d.endpoint() == *endpoint)
-            .is_some()
+        todo!()
+        //self.devices
+        //    .read()
+        //    .await
+        //    .iter()
+        //    .find(|d| d.endpoint() == *endpoint)
+        //    .is_some()
     }
 }
 

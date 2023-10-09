@@ -10,24 +10,21 @@ mod timeout;
 
 use std::{
     error::Error,
+    sync::Arc,
     time::{Duration, Instant},
 };
 
-use async_nats::ServerAddr;
-use futures_util::StreamExt;
-use ractor::{call, call_t, Actor, OutputPort};
-use tokio::{
-    select, spawn,
-    sync::oneshot,
-    time::{interval, sleep},
-};
+use ractor::Actor;
+use tokio::{select, time::interval};
 use tracing::info;
 use web_linking::links;
 
 use crate::{
     debugger::Debugger,
+    device::Device,
     gateway::Gateway,
     hub::Hub,
+    service::Service,
     service_finder::{Port, ServiceFinder},
 };
 
@@ -36,8 +33,11 @@ type AppResult = Result<(), Box<dyn Error + Send + Sync + 'static>>;
 #[tokio::main]
 async fn main() -> AppResult {
     tracing_subscriber::fmt().try_init()?;
-    test_service_finder().await
+    //test_service_finder().await
     //test_hub().await
+    test_device().await?;
+
+    Ok(())
 }
 
 async fn real_main() -> AppResult {
@@ -112,5 +112,36 @@ async fn test_hub() -> AppResult {
         actor
             .send_message(hub::Msg::Publish("test".to_owned(), s))
             .unwrap();
+    }
+}
+
+async fn test_device() -> AppResult {
+    let (debugger, debugger_handle) =
+        Actor::spawn(Some("debugger".to_owned()), Debugger, ()).await?;
+
+    let port: device::EventPort = Default::default();
+
+    let (device, _) = Actor::spawn_linked(
+        Some("service_finder".to_owned()),
+        Device,
+        device::Arguments {
+            event_port: port.clone(),
+            service: Arc::new(Service {
+                found_at: Instant::now(),
+                name: "some-device".to_owned(),
+                port: 5683,
+                target: "192.168.1.217".to_owned(),
+            }),
+        },
+        debugger.clone().into(),
+    )
+    .await?;
+
+    port.subscribe(debugger, |msg| Some(format!("{:#?}", msg)));
+
+    select! {
+        result = debugger_handle => {
+            Ok(result?)
+        }
     }
 }

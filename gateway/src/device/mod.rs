@@ -1,19 +1,8 @@
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
-/*
-
-TODO:
-
-- connect to device
-- publish connected to device
-- discover resources
-- publish discovered resources
-- ping every 10 seconds
-- publish success full ping
-- publish unsuccessful ping
-- publish connection lost to device
-
-*/
 use async_trait::async_trait;
 use coapium::{
     asynchronous::{default_parameters, default_reliability, Client},
@@ -34,13 +23,13 @@ pub type EventPort = Arc<OutputPort<Event>>;
 
 #[derive(Clone, Debug)]
 pub enum Event {
-    Connected,
-    Discovered,
-    PollingResource,
-    ResourcePolled,
-    Pinging,
-    Pinged,
-    PingFailed,
+    Connected(Arc<Service>, Instant),
+    Discovered(Arc<Service>, Instant, Arc<Vec<ResourceInstance>>),
+    PollingResource(Arc<Service>, Instant, ResourceInstance),
+    ResourcePolled(Arc<Service>, Instant, ResourceInstance, Vec<u8>),
+    Pinging(Arc<Service>, Instant),
+    Pinged(Arc<Service>, Instant),
+    PingFailed(Arc<Service>, Instant),
 }
 
 pub struct Device;
@@ -50,28 +39,33 @@ impl Device {
         let endpoint = format!("coap://{}", service.socket_address());
         let client = Client::new(Endpoint::from_str(&endpoint).unwrap()).await;
 
-        event_port.send(Event::Connected);
+        event_port.send(Event::Connected(service.clone(), Instant::now()));
 
         client
     }
 
     async fn ping(state: &mut State) {
-        state.event_port.send(Event::Pinging);
+        state
+            .event_port
+            .send(Event::Pinging(state.service.clone(), Instant::now()));
 
-        if let Err(e) = //ping("coap://192.168.1.217:5683".try_into().unwrap())
-            state
-                .client
-                .ping(Ping {
-                    confirmable_parameters: default_parameters(),
-                })
-                .await
+        if let Err(e) = state
+            .client
+            .ping(Ping {
+                confirmable_parameters: default_parameters(),
+            })
+            .await
         {
-            state.event_port.send(Event::PingFailed);
+            state
+                .event_port
+                .send(Event::PingFailed(state.service.clone(), Instant::now()));
 
             panic!("Failed to ping device: {:?}", e);
         }
 
-        state.event_port.send(Event::Pinged);
+        state
+            .event_port
+            .send(Event::Pinged(state.service.clone(), Instant::now()));
     }
 
     async fn discover(state: &mut State) {
@@ -102,16 +96,21 @@ impl Device {
             .unwrap();
 
         state.resources = Arc::new(resource_instances);
-        state.event_port.send(Event::Discovered);
+        state.event_port.send(Event::Discovered(
+            state.service.clone(),
+            Instant::now(),
+            state.resources.clone(),
+        ));
     }
 
     async fn pre_start(actor: Actor, arguments: Arguments) -> Result<State, ActorProcessingErr> {
-        let client = Self::connect(arguments.service, arguments.event_port.clone()).await;
+        let client = Self::connect(arguments.service.clone(), arguments.event_port.clone()).await;
 
         let mut state = State {
             client,
             event_port: arguments.event_port,
             resources: Arc::new(vec![]),
+            service: arguments.service,
         };
 
         Self::ping(&mut state).await;
@@ -127,16 +126,17 @@ impl Device {
 
     async fn poll(state: &mut State) {
         for resource in state.resources.iter() {
-            Self::poll_resource(&mut state.client, &state.event_port, resource).await;
+            Self::poll_resource(state.service.clone(), &mut state.client, &state.event_port, resource).await;
         }
     }
 
     async fn poll_resource(
+        service: Arc<Service>,
         client: &mut Client,
         event_port: &EventPort,
         resource: &ResourceInstance,
     ) {
-        event_port.send(Event::PollingResource);
+        event_port.send(Event::PollingResource(service.clone(), Instant::now(), *resource));
 
         let mut options = GetOptions::new();
         options.set_uri_path(resource.to_path().try_into().unwrap());
@@ -152,7 +152,12 @@ impl Device {
             panic!("response is not success: {:?}", response.response_code);
         }
 
-        event_port.send(Event::ResourcePolled);
+        event_port.send(Event::ResourcePolled(
+            service,
+            Instant::now(),
+            *resource,
+            response.payload.value().to_vec(),
+        ));
     }
 
     async fn handle(_: Actor, state: &mut State, msg: Msg) -> Result<(), ActorProcessingErr> {
@@ -178,6 +183,7 @@ pub struct State {
     client: Client,
     event_port: EventPort,
     resources: Arc<Vec<ResourceInstance>>,
+    service: Arc<Service>,
 }
 
 #[async_trait]

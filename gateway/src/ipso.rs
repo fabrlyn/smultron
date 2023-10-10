@@ -6,7 +6,7 @@ use nom::{
     IResult,
 };
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct ResourceInstance {
     pub object_id: u16,
     pub instance_id: u16,

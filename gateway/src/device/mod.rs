@@ -30,6 +30,7 @@ pub enum Event {
     Pinging(Arc<Service>, Instant),
     Pinged(Arc<Service>, Instant),
     PingFailed(Arc<Service>, Instant),
+    Disconnected(Arc<Service>, Instant),
 }
 
 pub struct Device;

@@ -1,20 +1,11 @@
-/*
-TODO:
-
-- start discovery for devices
-- handle discovered device
-- scheduled discovery
-- publish discovered device
-- handle stopped device, publish events to hub
-*/
-
-use std::error::Error;
+use std::time::Instant;
 use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use ractor::{ActorCell, ActorProcessingErr, ActorRef, OutputPort, SupervisionEvent};
 use tracing::info;
 
+use crate::device::{self};
 use crate::{
     service::Service,
     service_finder::{self, ServiceFinder},
@@ -26,13 +17,21 @@ pub type Actor = ActorRef<Msg>;
 
 pub type EventPort = Arc<OutputPort<Event>>;
 
+#[derive(Clone)]
+pub struct Device {
+    pub service: Arc<Service>,
+    pub event_port: device::EventPort,
+    pub actor: device::Actor,
+}
+
 #[derive(Clone, Debug)]
 pub enum Event {
     Found(Arc<Service>),
+    Device(device::Event),
 }
 
 pub struct Arguments {
-    event_port: Option<EventPort>,
+    pub event_port: Option<EventPort>,
 }
 
 pub enum Msg {
@@ -43,21 +42,46 @@ pub enum Msg {
 pub struct State {
     service_finder: Option<service_finder::Actor>,
     event_port: Option<EventPort>,
-    devices: Vec<Arc<Service>>,
+    devices: Vec<Device>,
 }
 
 impl State {
     fn has_service(&self, service: &Service) -> bool {
-        self.devices.iter().any(|s| s.name == service.name)
+        self.devices
+            .iter()
+            .any(|device| device.service.name == service.name)
     }
 
-    fn put_service(&mut self, service: Arc<Service>) -> Option<Arc<Service>> {
-        if self.has_service(&service) {
+    fn has_actor(&self, actor: &ActorCell) -> bool {
+        self.devices
+            .iter()
+            .any(|device| device.actor.get_id() == actor.get_id())
+    }
+
+    fn put_device(&mut self, device: Device) -> Option<Device> {
+        if self.has_service(&device.service) {
             return None;
         }
 
-        self.devices.push(service.clone());
-        Some(service)
+        self.devices.push(device.clone());
+        Some(device)
+    }
+
+    fn is_service_finder(&self, other: &ActorCell) -> bool {
+        if let Some(service_finder) = &self.service_finder {
+            service_finder.get_id() == other.get_id()
+        } else {
+            return false;
+        }
+    }
+
+    fn remove_by_actor(&mut self, actor: &ActorCell) -> Option<Device> {
+        let device_position = self
+            .devices
+            .iter()
+            .position(|device| device.actor.get_id() == actor.get_id())?;
+
+        Some(self.devices.swap_remove(device_position))
     }
 }
 
@@ -76,8 +100,31 @@ impl DeviceManager {
         Ok(state)
     }
 
-    async fn found(state: &mut State, service: Arc<Service>) {
-        let Some(service) = state.put_service(service) else {
+    async fn found(actor: Actor, state: &mut State, service: Arc<Service>) {
+        let event_port: device::EventPort = Default::default();
+        if let Some(actor_event_port) = state.event_port.clone() {
+            event_port.subscribe(actor.clone(), move |event| {
+                actor_event_port.send(Event::Device(event));
+                None
+            });
+        }
+
+        let device_name = Some(format!("device_{}", &service.target));
+        let arguments = device::Arguments {
+            event_port: event_port.clone(),
+            service: service.clone(),
+        };
+
+        let (device_actor, _) =
+            ractor::Actor::spawn_linked(device_name, device::Device, arguments, actor.into())
+                .await
+                .unwrap();
+
+        let Some(device) = state.put_device(Device {
+            service,
+            event_port,
+            actor: device_actor,
+        }) else {
             return;
         };
 
@@ -85,12 +132,12 @@ impl DeviceManager {
             return;
         };
 
-        event_port.send(Event::Found(service));
+        event_port.send(Event::Found(device.service));
     }
 
     async fn handle(actor: Actor, state: &mut State, msg: Msg) -> Result<(), ActorProcessingErr> {
         match msg {
-            Msg::Found(service) => Self::found(state, service).await,
+            Msg::Found(service) => Self::found(actor, state, service).await,
             Msg::Search => Self::search(actor, state).await,
         }
         Ok(())
@@ -124,12 +171,10 @@ impl DeviceManager {
         state.service_finder = Some(service_finder);
     }
 
-    fn service_finder_panicked(actor: Actor, state: &mut State) {
-        Self::schedule_service_finder(actor, state);
-    }
-
-    fn service_finder_terminated(actor: Actor, state: &mut State) {
-        Self::schedule_service_finder(actor, state)
+    fn service_finder_stopped(actor: Actor, state: &mut State, stopped: &ActorCell) {
+        if state.is_service_finder(stopped) {
+            Self::schedule_service_finder(actor, state)
+        }
     }
 
     fn schedule_service_finder(actor: Actor, state: &mut State) {
@@ -141,17 +186,22 @@ impl DeviceManager {
         actor.send_after(Duration::from_secs(60 * 5), || Msg::Search);
     }
 
-    async fn link_panicked(
-        actor: Actor,
-        state: &mut State,
-        link: ActorCell,
-        _: Box<dyn Error + Send + Sync>,
-    ) {
-        if let Some(service_finder) = &state.service_finder {
-            if service_finder.get_id() == link.get_id() {
-                Self::service_finder_panicked(actor, state);
-            }
+    async fn remove_device(state: &mut State, stopped: &ActorCell) {
+        let Some(device) = state.remove_by_actor(&stopped) else {
+            return;
+        };
+
+        if let Some(event_port) = &state.event_port {
+            event_port.send(Event::Device(device::Event::Disconnected(
+                device.service.clone(),
+                Instant::now(),
+            )))
         }
+    }
+
+    async fn actor_stopped(actor: Actor, state: &mut State, terminated: ActorCell) {
+        Self::remove_device(state, &terminated).await;
+        Self::service_finder_stopped(actor, state, &terminated);
     }
 
     async fn handle_supervisor_evt(
@@ -161,8 +211,12 @@ impl DeviceManager {
     ) -> Result<(), ActorProcessingErr> {
         use SupervisionEvent::*;
         match event {
-            ActorTerminated(_, _, _) => Self::service_finder_terminated(actor, state),
-            ActorPanicked(link, error) => Self::link_panicked(actor, state, link, error).await,
+            ActorTerminated(terminated_actor, _, _) => {
+                Self::actor_stopped(actor, state, terminated_actor).await
+            }
+            ActorPanicked(panicked_actor, _) => {
+                Self::actor_stopped(actor, state, panicked_actor).await
+            }
             event => {
                 info!("Other supervisor event: {:?}", event);
             }

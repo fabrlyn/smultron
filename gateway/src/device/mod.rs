@@ -114,8 +114,6 @@ impl Device {
             service: arguments.service,
         };
 
-        Self::ping(&mut state).await;
-
         Self::discover(&mut state).await;
 
         actor.send_interval(Duration::from_secs(10), || Msg::Ping);
@@ -127,7 +125,13 @@ impl Device {
 
     async fn poll(state: &mut State) {
         for resource in state.resources.iter() {
-            Self::poll_resource(state.service.clone(), &mut state.client, &state.event_port, resource).await;
+            Self::poll_resource(
+                state.service.clone(),
+                &mut state.client,
+                &state.event_port,
+                resource,
+            )
+            .await;
         }
     }
 
@@ -137,7 +141,11 @@ impl Device {
         event_port: &EventPort,
         resource: &ResourceInstance,
     ) {
-        event_port.send(Event::PollingResource(service.clone(), Instant::now(), *resource));
+        event_port.send(Event::PollingResource(
+            service.clone(),
+            Instant::now(),
+            *resource,
+        ));
 
         let mut options = GetOptions::new();
         options.set_uri_path(resource.to_path().try_into().unwrap());

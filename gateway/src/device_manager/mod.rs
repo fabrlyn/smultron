@@ -35,6 +35,7 @@ pub struct Arguments {
 }
 
 pub enum Msg {
+    Published(device::Event),
     Found(Arc<Service>),
     Search,
 }
@@ -52,19 +53,8 @@ impl State {
             .any(|device| device.service.name == service.name)
     }
 
-    fn has_actor(&self, actor: &ActorCell) -> bool {
-        self.devices
-            .iter()
-            .any(|device| device.actor.get_id() == actor.get_id())
-    }
-
-    fn put_device(&mut self, device: Device) -> Option<Device> {
-        if self.has_service(&device.service) {
-            return None;
-        }
-
+    fn add_device(&mut self, device: Device) {
         self.devices.push(device.clone());
-        Some(device)
     }
 
     fn is_service_finder(&self, other: &ActorCell) -> bool {
@@ -82,6 +72,12 @@ impl State {
             .position(|device| device.actor.get_id() == actor.get_id())?;
 
         Some(self.devices.swap_remove(device_position))
+    }
+
+    fn send(&self, event: Event) {
+        if let Some(event_port) = &self.event_port {
+            event_port.send(event);
+        }
     }
 }
 
@@ -101,13 +97,12 @@ impl DeviceManager {
     }
 
     async fn found(actor: Actor, state: &mut State, service: Arc<Service>) {
-        let event_port: device::EventPort = Default::default();
-        if let Some(actor_event_port) = state.event_port.clone() {
-            event_port.subscribe(actor.clone(), move |event| {
-                actor_event_port.send(Event::Device(event));
-                None
-            });
+        if state.has_service(&service) {
+            return;
         }
+
+        let event_port: device::EventPort = Default::default();
+        event_port.subscribe(actor.clone(), move |event| Some(Msg::Published(event)));
 
         let device_name = Some(format!("device_{}", &service.target));
         let arguments = device::Arguments {
@@ -120,24 +115,23 @@ impl DeviceManager {
                 .await
                 .unwrap();
 
-        let Some(device) = state.put_device(Device {
-            service,
+        state.add_device(Device {
+            service: service.clone(),
             event_port,
             actor: device_actor,
-        }) else {
-            return;
-        };
+        });
 
-        let Some(event_port) = &state.event_port else {
-            return;
-        };
+        state.send(Event::Found(service));
+    }
 
-        event_port.send(Event::Found(device.service));
+    fn published(state: &mut State, event: device::Event) {
+        state.send(Event::Device(event))
     }
 
     async fn handle(actor: Actor, state: &mut State, msg: Msg) -> Result<(), ActorProcessingErr> {
         match msg {
             Msg::Found(service) => Self::found(actor, state, service).await,
+            Msg::Published(event) => Self::published(state, event),
             Msg::Search => Self::search(actor, state).await,
         }
         Ok(())

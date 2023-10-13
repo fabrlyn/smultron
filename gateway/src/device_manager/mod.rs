@@ -2,7 +2,8 @@ use std::time::Instant;
 use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
-use ractor::{ActorCell, ActorProcessingErr, ActorRef, OutputPort, SupervisionEvent};
+use ractor::concurrency::{broadcast, BroadcastReceiver, BroadcastSender};
+use ractor::{ActorCell, ActorProcessingErr, ActorRef, OutputPort, RpcReplyPort, SupervisionEvent};
 use tracing::info;
 
 use crate::device::{self};
@@ -16,6 +17,9 @@ pub const DEVICE_SERVICE_NAME: &str = "_coap._udp.local";
 pub type Actor = ActorRef<Msg>;
 
 pub type EventPort = Arc<OutputPort<Event>>;
+
+pub type GetPort = RpcReplyPort<Vec<Arc<Service>>>;
+pub type SubscribePort = RpcReplyPort<BroadcastReceiver<String>>;
 
 #[derive(Clone)]
 pub struct Device {
@@ -38,12 +42,15 @@ pub enum Msg {
     Published(device::Event),
     Found(Arc<Service>),
     Search,
+    Get(GetPort),
+    Subscribe(SubscribePort),
 }
 
 pub struct State {
     service_finder: Option<service_finder::Actor>,
     event_port: Option<EventPort>,
     devices: Vec<Device>,
+    broadcaster: BroadcastSender<String>,
 }
 
 impl State {
@@ -85,10 +92,12 @@ pub struct DeviceManager;
 
 impl DeviceManager {
     async fn pre_start(actor: Actor, arguments: Arguments) -> Result<State, ActorProcessingErr> {
+        let (broadcaster, _) = broadcast(100);
         let mut state = State {
             service_finder: None,
             event_port: arguments.event_port,
             devices: vec![],
+            broadcaster,
         };
 
         Self::search(actor, &mut state).await;
@@ -125,14 +134,32 @@ impl DeviceManager {
     }
 
     fn published(state: &mut State, event: device::Event) {
-        state.send(Event::Device(event))
+        state.send(Event::Device(event.clone()));
+        if let Err(_) = state.broadcaster.send(format!("{:?}", event)) {}
+    }
+
+    fn get(state: &mut State, port: GetPort) {
+        port.send(
+            state
+                .devices
+                .iter()
+                .map(|device| device.service.clone())
+                .collect(),
+        )
+        .unwrap();
+    }
+
+    fn subscribe(state: &mut State, port: SubscribePort) {
+        port.send(state.broadcaster.subscribe()).unwrap();
     }
 
     async fn handle(actor: Actor, state: &mut State, msg: Msg) -> Result<(), ActorProcessingErr> {
         match msg {
             Msg::Found(service) => Self::found(actor, state, service).await,
+            Msg::Get(port) => Self::get(state, port),
             Msg::Published(event) => Self::published(state, event),
             Msg::Search => Self::search(actor, state).await,
+            Msg::Subscribe(port) => Self::subscribe(state, port),
         }
         Ok(())
     }

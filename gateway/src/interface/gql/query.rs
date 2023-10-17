@@ -1,6 +1,8 @@
 use async_graphql::{Context, Object};
 
-use super::{model::Device, Handler};
+use crate::{application::port::Port, domain::get_devices::get_devices};
+
+use super::model::Device;
 
 pub struct Root;
 
@@ -11,6 +13,10 @@ impl Root {
     }
 
     async fn devices(&self, ctx: &Context<'_>) -> Vec<Device> {
-        ctx.data_unchecked::<Box<dyn Handler>>().get_devices().await
+        get_devices(ctx.data_unchecked::<Box<dyn Port>>().as_ref())
+            .await
+            .into_iter()
+            .map(Into::into)
+            .collect()
     }
 }

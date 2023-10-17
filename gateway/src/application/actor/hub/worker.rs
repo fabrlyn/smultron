@@ -5,21 +5,21 @@ use async_trait::async_trait;
 use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort};
 use tracing::{error, info, warn};
 
-use crate::service::Service;
+use crate::mdns_service::MdnsService;
 
 pub type Actor = ActorRef<Msg>;
 pub type ReplyPort = RpcReplyPort<Result<(), ()>>;
 
 #[derive(Debug)]
 pub struct Arguments {
-    pub service: Arc<Service>,
+    pub service: Arc<MdnsService>,
 }
 
 #[derive(Debug)]
 pub struct Worker;
 
 impl Worker {
-    async fn connect(service: Arc<Service>) -> Result<State, ActorProcessingErr> {
+    async fn connect(service: Arc<MdnsService>) -> Result<State, ActorProcessingErr> {
         info!("Connecting to {}", service.socket_address());
 
         let client = async_nats::ConnectOptions::new()

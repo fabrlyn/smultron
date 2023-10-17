@@ -1,6 +1,6 @@
 use super::{port::BroadcastPort, Event, ReplyPort};
 use crate::{
-    service::{self, Service},
+    mdns_service::{self, MdnsService},
     service_finder::task,
 };
 use async_trait::async_trait;
@@ -13,11 +13,11 @@ pub const DEFAULT_INTERVAL: Duration = Duration::from_secs(30);
 
 pub type Actor = ActorRef<Msg>;
 
-pub type GetTx = RpcReplyPort<Vec<Arc<Service>>>;
+pub type GetTx = RpcReplyPort<Vec<Arc<MdnsService>>>;
 
 #[derive(Debug)]
 pub struct Arguments {
-    pub name: service::Name,
+    pub name: mdns_service::Name,
     pub port: Option<super::Port>,
     pub interval: Option<Duration>,
     pub timeout: Option<Duration>,
@@ -25,8 +25,8 @@ pub struct Arguments {
 
 #[derive(Debug)]
 pub enum Msg {
-    Found(Service),
-    Get(RpcReplyPort<Vec<Arc<Service>>>),
+    Found(MdnsService),
+    Get(RpcReplyPort<Vec<Arc<MdnsService>>>),
     TaskStopping,
 }
 
@@ -40,17 +40,17 @@ pub struct State {
     port: Option<Port>,
     stop_tx: Option<task::StopTx>,
 
-    pub services: Vec<Arc<Service>>,
+    pub services: Vec<Arc<MdnsService>>,
 }
 
 impl State {
-    fn find_by_service(&self, subject: &Service) -> Option<&Arc<Service>> {
+    fn find_by_service(&self, subject: &MdnsService) -> Option<&Arc<MdnsService>> {
         self.services
             .iter()
             .find(|service| service.as_ref() == subject)
     }
 
-    fn put_service(&mut self, service: Service) -> Option<Arc<Service>> {
+    fn put_service(&mut self, service: MdnsService) -> Option<Arc<MdnsService>> {
         if self.service_exists(&service) {
             return None;
         }
@@ -61,7 +61,7 @@ impl State {
         Some(service)
     }
 
-    fn service_exists(&self, service: &Service) -> bool {
+    fn service_exists(&self, service: &MdnsService) -> bool {
         self.find_by_service(service).is_some()
     }
 }
@@ -69,7 +69,7 @@ impl State {
 pub struct Worker;
 
 impl Worker {
-    fn found(actor: Actor, state: &mut State, service: Service) {
+    fn found(actor: Actor, state: &mut State, service: MdnsService) {
         let Some(service) = state.put_service(service.clone()) else {
             return;
         };
@@ -139,7 +139,7 @@ fn broadcast(port: &BroadcastPort, event: Event) {
     port.send(event);
 }
 
-fn reply(actor: Actor, state: &mut State, service: Arc<Service>) {
+fn reply(actor: Actor, state: &mut State, service: Arc<MdnsService>) {
     info!("Replying with found service {:?}", service);
 
     let Some(Port::Reply(Some(port))) = state.port.take() else {
@@ -159,7 +159,7 @@ fn reply(actor: Actor, state: &mut State, service: Arc<Service>) {
     Worker::stop(actor, state);
 }
 
-fn send(actor: Actor, state: &mut State, service: Arc<Service>) {
+fn send(actor: Actor, state: &mut State, service: Arc<MdnsService>) {
     match &state.port {
         Some(Port::Reply(_)) => reply(actor, state, service),
         Some(Port::Broadcast(port)) => broadcast(port, Event::Found(service)),

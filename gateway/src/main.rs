@@ -1,20 +1,13 @@
+mod application;
 mod config;
-mod debugger;
-mod device;
-mod device_manager;
-mod gateway;
-mod gql;
-mod gql_plug;
-mod http_api;
-mod hub;
-mod ipso;
-mod service;
-mod service_finder;
-mod timeout;
+mod domain;
+mod infrastructure;
+mod interface;
 
 use std::error::Error;
 
 use config::Config;
+use interface::{adapter::InMemoryAdapter, gql, http};
 
 type AppResult = Result<(), Box<dyn Error + Send + Sync + 'static>>;
 
@@ -23,13 +16,13 @@ async fn main() -> AppResult {
     tracing_subscriber::fmt().try_init()?;
 
     let config = Config {
-        http_api: http_api::Config {
+        http_api: http::Config {
             port: 8000,
             address: [0, 0, 0, 0].into(),
         },
     };
 
-    let gql_schema = gql::schema(Box::new(gql_plug::GqlPlug {}));
+    let gql_schema = gql::schema(Box::new(InMemoryAdapter {}));
 
-    http_api::run(&config.http_api, gql_schema).await
+    http::run(&config.http_api, gql_schema).await
 }

@@ -1,14 +1,13 @@
 use async_graphql::{EmptyMutation, Schema};
 
-mod handler;
+use crate::application::port::Port;
+
 pub mod model;
 mod query;
 mod subscription;
 
-pub use handler::Handler;
-
-pub fn schema(handler: Box<dyn Handler>) -> Schema<query::Root, EmptyMutation, subscription::Root> {
+pub fn schema(port: Box<dyn Port>) -> Schema<query::Root, EmptyMutation, subscription::Root> {
     Schema::build(query::Root, EmptyMutation, subscription::Root)
-        .data(handler)
+        .data(port)
         .finish()
 }

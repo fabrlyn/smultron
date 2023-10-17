@@ -8,7 +8,7 @@ use tracing::info;
 
 use crate::device::{self};
 use crate::{
-    service::Service,
+    mdns_service::MdnsService,
     service_finder::{self, ServiceFinder},
 };
 
@@ -18,19 +18,19 @@ pub type Actor = ActorRef<Msg>;
 
 pub type EventPort = Arc<OutputPort<Event>>;
 
-pub type GetPort = RpcReplyPort<Vec<Arc<Service>>>;
+pub type GetPort = RpcReplyPort<Vec<Arc<MdnsService>>>;
 pub type SubscribePort = RpcReplyPort<BroadcastReceiver<String>>;
 
 #[derive(Clone)]
 pub struct Device {
-    pub service: Arc<Service>,
+    pub service: Arc<MdnsService>,
     pub event_port: device::EventPort,
     pub actor: device::Actor,
 }
 
 #[derive(Clone, Debug)]
 pub enum Event {
-    Found(Arc<Service>),
+    Found(Arc<MdnsService>),
     Device(device::Event),
 }
 
@@ -40,7 +40,7 @@ pub struct Arguments {
 
 pub enum Msg {
     Published(device::Event),
-    Found(Arc<Service>),
+    Found(Arc<MdnsService>),
     Search,
     Get(GetPort),
     Subscribe(SubscribePort),
@@ -54,7 +54,7 @@ pub struct State {
 }
 
 impl State {
-    fn has_service(&self, service: &Service) -> bool {
+    fn has_service(&self, service: &MdnsService) -> bool {
         self.devices
             .iter()
             .any(|device| device.service.name == service.name)
@@ -105,7 +105,7 @@ impl DeviceManager {
         Ok(state)
     }
 
-    async fn found(actor: Actor, state: &mut State, service: Arc<Service>) {
+    async fn found(actor: Actor, state: &mut State, service: Arc<MdnsService>) {
         if state.has_service(&service) {
             return;
         }

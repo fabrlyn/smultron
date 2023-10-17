@@ -1,6 +1,6 @@
-use crate::http_api;
+use crate::http;
 
 #[derive(Clone, Debug)]
 pub struct Config {
-    pub http_api: http_api::Config,
+    pub http_api: http::Config,
 }

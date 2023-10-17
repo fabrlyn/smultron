@@ -1,13 +1,13 @@
-use crate::service::Service;
+use crate::mdns_service::MdnsService;
 use ractor::RpcReplyPort;
 use std::{fmt, sync::Arc};
 
 pub type BroadcastPort = Arc<ractor::OutputPort<Event>>;
-pub type ReplyPort = RpcReplyPort<Arc<Service>>;
+pub type ReplyPort = RpcReplyPort<Arc<MdnsService>>;
 
 #[derive(Clone, Debug)]
 pub enum Event {
-    Found(Arc<Service>),
+    Found(Arc<MdnsService>),
 }
 
 pub enum Port {

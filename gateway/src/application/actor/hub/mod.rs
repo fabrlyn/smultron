@@ -9,14 +9,14 @@ use tokio::{spawn, sync::oneshot};
 use tracing::{error, info};
 
 use crate::{
-    service::Service,
+    mdns_service::MdnsService,
     service_finder::{self, ServiceFinder},
 };
 
 use self::worker::Worker;
 
 pub type Actor = ActorRef<Msg>;
-pub type FoundResponse = Result<Arc<Service>, Box<dyn Error + Send + Sync>>;
+pub type FoundResponse = Result<Arc<MdnsService>, Box<dyn Error + Send + Sync>>;
 
 const HUB_SERVICE: &'static str = "_smultron_hub._tcp.local";
 

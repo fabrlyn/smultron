@@ -12,10 +12,7 @@ use coapium::{
 use ractor::{ActorProcessingErr, ActorRef, OutputPort};
 use web_linking::links;
 
-use crate::{
-    ipso::{self, ResourceInstance},
-    service::Service,
-};
+use crate::{domain::resource_instance::ResourceInstance, mdns_service::MdnsService};
 
 pub type Actor = ActorRef<Msg>;
 
@@ -23,20 +20,20 @@ pub type EventPort = Arc<OutputPort<Event>>;
 
 #[derive(Clone, Debug)]
 pub enum Event {
-    Connected(Arc<Service>, Instant),
-    Discovered(Arc<Service>, Instant, Arc<Vec<ResourceInstance>>),
-    PollingResource(Arc<Service>, Instant, ResourceInstance),
-    ResourcePolled(Arc<Service>, Instant, ResourceInstance, Vec<u8>),
-    Pinging(Arc<Service>, Instant),
-    Pinged(Arc<Service>, Instant),
-    PingFailed(Arc<Service>, Instant),
-    Disconnected(Arc<Service>, Instant),
+    Connected(Arc<MdnsService>, Instant),
+    Discovered(Arc<MdnsService>, Instant, Arc<Vec<ResourceInstance>>),
+    PollingResource(Arc<MdnsService>, Instant, ResourceInstance),
+    ResourcePolled(Arc<MdnsService>, Instant, ResourceInstance, Vec<u8>),
+    Pinging(Arc<MdnsService>, Instant),
+    Pinged(Arc<MdnsService>, Instant),
+    PingFailed(Arc<MdnsService>, Instant),
+    Disconnected(Arc<MdnsService>, Instant),
 }
 
 pub struct Device;
 
 impl Device {
-    async fn connect(service: Arc<Service>, event_port: EventPort) -> Client {
+    async fn connect(service: Arc<MdnsService>, event_port: EventPort) -> Client {
         let endpoint = format!("coap://{}", service.socket_address());
         let client = Client::new(Endpoint::from_str(&endpoint).unwrap()).await;
 
@@ -92,7 +89,7 @@ impl Device {
             .unwrap()
             .into_iter()
             .map(|l| l.value.value)
-            .map(ipso::ResourceInstance::from_str)
+            .map(ResourceInstance::from_str)
             .collect::<Result<Vec<_>, _>>()
             .unwrap();
 
@@ -136,7 +133,7 @@ impl Device {
     }
 
     async fn poll_resource(
-        service: Arc<Service>,
+        service: Arc<MdnsService>,
         client: &mut Client,
         event_port: &EventPort,
         resource: &ResourceInstance,
@@ -180,7 +177,7 @@ impl Device {
 
 pub struct Arguments {
     pub event_port: EventPort,
-    pub service: Arc<Service>,
+    pub service: Arc<MdnsService>,
 }
 
 pub enum Msg {
@@ -192,7 +189,7 @@ pub struct State {
     client: Client,
     event_port: EventPort,
     resources: Arc<Vec<ResourceInstance>>,
-    service: Arc<Service>,
+    service: Arc<MdnsService>,
 }
 
 #[async_trait]

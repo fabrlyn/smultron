@@ -1,6 +1,6 @@
 use super::worker::Actor;
 use crate::{
-    service::{Name, Service},
+    mdns_service::{MdnsService, Name},
     service_finder::worker::Msg,
 };
 use futures_util::{pin_mut, StreamExt};
@@ -16,13 +16,13 @@ use tracing::{error, info};
 pub type StopRx = oneshot::Receiver<()>;
 pub type StopTx = oneshot::Sender<()>;
 
-fn find_services(response: Response) -> Vec<Service> {
+fn find_services(response: Response) -> Vec<MdnsService> {
     response.records().filter_map(into_service).collect()
 }
 
-fn into_service(record: &mdns::Record) -> Option<Service> {
+fn into_service(record: &mdns::Record) -> Option<MdnsService> {
     match &record.kind {
-        mdns::RecordKind::SRV { port, target, .. } => Some(Service {
+        mdns::RecordKind::SRV { port, target, .. } => Some(MdnsService {
             found_at: Instant::now(),
             name: record.name.clone(),
             port: *port,

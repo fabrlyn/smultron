@@ -10,7 +10,7 @@ use ractor::actor::messages::BoxedState;
 use ractor::ActorCell;
 
 use crate::{
-    service::{self, Service},
+    mdns_service::{self, MdnsService},
     service_finder::worker::Worker,
 };
 use async_trait::async_trait;
@@ -24,7 +24,7 @@ pub type Actor = ActorRef<Msg>;
 
 #[derive(Debug)]
 pub struct Arguments {
-    pub name: service::Name,
+    pub name: mdns_service::Name,
     pub port: Option<Port>,
     pub interval: Option<Duration>,
     pub timeout: Option<Duration>,
@@ -98,7 +98,7 @@ impl ServiceFinder {
 pub struct State {
     worker: worker::Actor,
 
-    pub services: Vec<Arc<Service>>,
+    pub services: Vec<Arc<MdnsService>>,
 }
 
 impl State {

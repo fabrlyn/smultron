@@ -1,0 +1,13 @@
+#!/bin/sh
+
+# Usage: ./run $1 $2
+# $1 = service query
+# $2 = interval in seconds
+
+# Example: ./run _googlecast._tcp.local 5
+
+stdbuf -oL fm-dns $1 --interval $2 |
+  while IFS= read -r line
+  do
+      nats publish mdns "$line"
+  done

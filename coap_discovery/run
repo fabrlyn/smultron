@@ -1,0 +1,5 @@
+$!/bin/zsh
+
+local endpoint=$(cat <json> | jq '.additional| map(select(.kind.tag == "SRV")) | .[0] | (.kind.content.target + ":" + (.kind.content.port|tostring))' -r)
+
+local discovery=$(paco get $endpoint/.well-known/core)

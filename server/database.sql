@@ -4,8 +4,8 @@
 
 create table hub (
   id          bigserial   not null,
-  external_id uuid        not null default gen_random_uuid(),
   created_at  timestamptz not null default (now() at time zone 'utc'),
+  external_id uuid        not null default gen_random_uuid(),
   name        text        not null,
 
   constraint pk_hub primary key(
@@ -18,7 +18,7 @@ create table hub (
     length(name) <= 80
   ),
   constraint ck_name__characters check(
-    name ~ '^[a-z]([-_]?[a-z0-9]+)*[a-z0-9]?$'
+    name ~ '^[a-z](-?[a-z0-9]+)*[a-z0-9]?$'
   )
 );
 

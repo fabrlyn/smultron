@@ -3,18 +3,22 @@
 --);
 
 create table thing (
-  internal_id bigserial   not null,
+  id          bigserial   not null,
+  external_id uuid        not null default gen_random_uuid(),
   created_at  timestamptz not null default (now() at time zone 'utc'),
-  id          text        not null,
+  name        text        not null,
 
-  constraint thing_pk primary key(
-    internal_id
+  constraint pk_thing primary key(
+    id
   ),
-  constraint ck_id__length check(
-    length(id) <= 63
+  constraint uq_name unique(
+    name
   ),
-  constraint ck_id__characters check(
-    id ~ '^[a-z]+(-[a-z0-9]+)?$'
+  constraint ck_name__length check(
+    length(name) <= 80
+  ),
+  constraint ck_name__characters check(
+    name ~ '^[a-z]([-_]?[a-z0-9]+)*[a-z0-9]?$'
   )
 );
 

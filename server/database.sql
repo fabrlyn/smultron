@@ -2,13 +2,13 @@
 --  
 --);
 
-create table thing (
+create table hub (
   id          bigserial   not null,
   external_id uuid        not null default gen_random_uuid(),
   created_at  timestamptz not null default (now() at time zone 'utc'),
   name        text        not null,
 
-  constraint pk_thing primary key(
+  constraint pk_hub primary key(
     id
   ),
   constraint uq_name unique(
@@ -22,7 +22,7 @@ create table thing (
   )
 );
 
-create unique index ix_thing__id on thing(id);
+create unique index ix_hub__id on hub(id);
 
 --create table sensor (
 --

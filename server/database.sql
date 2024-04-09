@@ -1,4 +1,7 @@
-create table hub (
+begin;
+
+create 
+  table hub(
   id          bigserial   not null,
   created_at  timestamptz not null default (now() at time zone 'utc'),
   updated_at  timestamptz,
@@ -8,7 +11,7 @@ create table hub (
   constraint pk_hub primary key(
     id
   ),
-  constraint uq_name unique(
+  constraint uq_hub__name unique(
     name
   ),
   constraint ck_name__length check(
@@ -19,7 +22,7 @@ create table hub (
   )
 );
 
-create table thing {
+create table thing(
   id                   bigserial   not null,
   created_at           timestamptz not null default (now() at time zone 'utc'),
   updated_at           timestamptz,
@@ -34,7 +37,7 @@ create table thing {
   ) references hub(
     id
   ),
-  constraint uq_hub_reference unique(
+  constraint uq_thing__hub_reference unique(
     registered_by_hub_id, 
     hub_reference
   ),
@@ -44,9 +47,9 @@ create table thing {
   constraint ck_hub_reference__characters check(
     hub_reference ~ '^[a-z]([-_]?[a-z0-9]+)*[a-z0-9]?$'
   )
-}
+);
 
-create table sensor (
+create table sensor(
   id               bigserial   not null,
   created_at       timestamptz not null default (now() at time zone 'utc'),
   part_of_thing_id bigint      not null,
@@ -60,7 +63,7 @@ create table sensor (
   ) references thing(
     id
   ),
-  constraint uq_part_of_thing_id__hub_reference unique(
+  constraint uq_sensor__part_of_thing_id__hub_reference unique(
     part_of_thing_id, 
     hub_reference
   ),
@@ -72,7 +75,7 @@ create table sensor (
   )
 );
 
-create table actuator (
+create table actuator(
   id               bigserial   not null,
   created_at       timestamptz not null default (now() at time zone 'utc'),
   part_of_thing_id bigint      not null,
@@ -98,10 +101,10 @@ create table actuator (
   )
 );
 
-create table boolean_reading (
+create table boolean_reading(
   time                    timestamptz not null default (now() at time zone 'utc'),
   value                   boolean     not null,
-  registered_by_sensor_id bigint      not null,
+  registered_by_sensor_id bigint      not null
 );
 
 select create_hypertable(
@@ -109,11 +112,16 @@ select create_hypertable(
   by_range('time')
 );
 
-create index ix_boolean_reading__registered_by_sensor_id__time_desc ON boolean_reading (registered_by_sensor_id, time desc);
+create 
+  index ix_boolean_reading__registered_by_sensor_id__time_desc 
+  on boolean_reading(
+    registered_by_sensor_id, 
+    time desc
+  );
 
-create table signal_actuation (
+create table signal_actuation(
   time                    timestamptz not null default (now() at time zone 'utc'),
-  actuated_by_actuator_id bigint      not null,
+  actuated_by_actuator_id bigint      not null
 );
 
 select create_hypertable(
@@ -121,8 +129,12 @@ select create_hypertable(
   by_range('time')
 );
 
-create index ix_boolean_reading__registered_by_sensor_id__time_desc ON boolean_reading (registered_by_sensor_id, time desc);
+create 
+  index ix_signal_actuation__registered_by_sensor_id__time_desc 
+  on signal_actuation(
+    actuated_by_actuator_id, 
+    time desc
+  );
 
---create table actuation (
---
---);
+commit;
+

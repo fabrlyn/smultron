@@ -1,110 +1,77 @@
 begin;
 
-create 
-  table hub(
-  id          bigserial   not null,
+create function validate_reference_characters(text) returns boolean as
+$$ 
+begin
+  return $1 ~ '^[a-z]([-_]?[a-z0-9]+)*[a-z0-9]?$'; 
+end 
+$$ language plpgsql;
+
+create function validate_reference_length(text) returns boolean as
+$$
+begin
+  return length($1) <= 80;
+end
+$$ language plpgsql;
+
+create function validate_reference(text) returns boolean as
+$$
+begin
+  return validate_reference_characters($1) and validate_reference_length($1);
+end
+$$ language plpgsql;
+
+create table hub(
+  id          uuid        not null,
   created_at  timestamptz not null default (now() at time zone 'utc'),
   updated_at  timestamptz,
-  external_id uuid        not null default gen_random_uuid(),
   name        text        not null,
 
-  constraint pk_hub primary key(
-    id
-  ),
-  constraint uq_hub__name unique(
-    name
-  ),
-  constraint ck_name__length check(
-    length(name) <= 80
-  ),
-  constraint ck_name__characters check(
-    name ~ '^[a-z]([-_]?[a-z0-9]+)*[a-z0-9]?$'
-  )
+  constraint pk_hub       primary key(id),
+  constraint ck_name      check(validate_reference(name)),
+  constraint uq_hub__name unique(name)
 );
 
 create table thing(
-  id                   bigserial   not null,
+  id                   uuid        not null,
   created_at           timestamptz not null default (now() at time zone 'utc'),
-  updated_at           timestamptz,
-  registered_by_hub_id bigint      not null,
+  registered_by_hub_id uuid        not null,
   hub_reference        text        not null,
 
-  constraint pk_thing primary key(
-    id
-  ),
-  constraint fk_registered_by_id foreign key(
-    registered_by_hub_id
-  ) references hub(
-    id
-  ),
-  constraint uq_thing__hub_reference unique(
-    registered_by_hub_id, 
-    hub_reference
-  ),
-  constraint ck_hub_reference__length check(
-    length(hub_reference) <= 80
-  ),
-  constraint ck_hub_reference__characters check(
-    hub_reference ~ '^[a-z]([-_]?[a-z0-9]+)*[a-z0-9]?$'
-  )
+  constraint pk_thing                primary key(id),
+  constraint uq_thing__hub_reference unique(registered_by_hub_id, hub_reference),
+  constraint ck_hub_reference        check(validate_reference(hub_reference)),
+  constraint fk_registered_by_id     foreign key(registered_by_hub_id) references hub(id)
 );
 
 create table sensor(
-  id               bigserial   not null,
+  id               uuid        not null,
   created_at       timestamptz not null default (now() at time zone 'utc'),
-  part_of_thing_id bigint      not null,
+  part_of_thing_id uuid        not null,
   hub_reference    text        not null,
 
-  constraint pk_sensor primary key(
-    id
-  ),
-  constraint fk_part_of_thing_id foreign key(
-    part_of_thing_id
-  ) references thing(
-    id
-  ),
-  constraint uq_sensor__part_of_thing_id__hub_reference unique(
-    part_of_thing_id, 
-    hub_reference
-  ),
-  constraint ck_hub_reference__length check(
-    length(hub_reference) <= 80
-  ),
-  constraint ck_hub_reference__characters check(
-    hub_reference ~ '^[a-z]([-_]?[a-z0-9]+)*[a-z0-9]?$'
-  )
+  constraint pk_sensor                                  primary key(id),
+  constraint uq_sensor__part_of_thing_id__hub_reference unique(part_of_thing_id, hub_reference),
+  constraint ck_hub_reference                           check(validate_reference(hub_reference)),
+  constraint fk_part_of_thing_id                        foreign key(part_of_thing_id) references thing(id)
 );
 
 create table actuator(
-  id               bigserial   not null,
+  id               uuid        not null,
   created_at       timestamptz not null default (now() at time zone 'utc'),
-  part_of_thing_id bigint      not null,
+  part_of_thing_id uuid        not null,
   hub_reference    text        not null,
 
-  constraint pk_actuator primary key(
-    id
-  ),
-  constraint fk_part_of_thing_id foreign key(
-    part_of_thing_id
-  ) references thing(
-    id
-  ),
-  constraint uq_part_of_thing_id__hub_reference unique(
-    part_of_thing_id, 
-    hub_reference
-  ),
-  constraint ck_hub_reference__length check(
-    length(hub_reference) <= 80
-  ),
-  constraint ck_hub_reference__characters check(
-    hub_reference ~ '^[a-z]([-_]?[a-z0-9]+)*[a-z0-9]?$'
-  )
+  constraint pk_actuator                        primary key(id),
+  constraint uq_part_of_thing_id__hub_reference unique(part_of_thing_id, hub_reference),
+  constraint ck_hub_reference                   check(validate_reference(hub_reference)),
+  constraint fk_part_of_thing_id                foreign key(part_of_thing_id) references thing(id)
 );
 
 create table boolean_reading(
   time                    timestamptz not null default (now() at time zone 'utc'),
   value                   boolean     not null,
-  registered_by_sensor_id bigint      not null
+  registered_by_sensor_id uuid        not null
 );
 
 select create_hypertable(
@@ -121,7 +88,7 @@ create
 
 create table signal_actuation(
   time                    timestamptz not null default (now() at time zone 'utc'),
-  actuated_by_actuator_id bigint      not null
+  actuated_by_actuator_id uuid        not null
 );
 
 select create_hypertable(

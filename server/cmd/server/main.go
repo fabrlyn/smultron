@@ -9,7 +9,7 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/google/uuid"
+	"fabrlyn.com/smultron/server/internal/model"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -26,34 +26,6 @@ func main() {
 	hub, err := createHub(conn, CreateHub{name: reference})
 
 	fmt.Printf("%v\n", hub)
-}
-
-type Reference struct {
-	value string
-}
-
-func newReference(value string) (Reference, error) {
-	value_regexp, e := regexp.Compile("^[a-z]([-_]?[a-z0-9]+)*[a-z0-9]?$")
-	if e != nil {
-		panic(e)
-	}
-
-	if !value_regexp.MatchString(value) {
-		return Reference{}, errors.New("Invalid reference")
-	}
-
-	return Reference{value}, nil
-}
-
-type CreateHub struct {
-	name Reference
-}
-
-type Hub struct {
-	id         uuid.UUID    // TODO: ExternalId
-	created_at time.Time    // TODO: Timestamp
-	updated_at sql.NullTime // TODO: Maybe[Timestamp]
-	name       Reference
 }
 
 func findHubById(db *pgx.Conn, id uint64) (Hub, error) {

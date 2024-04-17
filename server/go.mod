@@ -3,6 +3,7 @@ module fabrlyn.com/smultron/server
 go 1.22.2
 
 require (
+	github.com/deatil/go-encoding v1.0.2005
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.5.5
 )

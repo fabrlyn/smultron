@@ -1,7 +1,7 @@
 package model
 
 import (
-	"database/sql"
+	"encoding/json"
 	"errors"
 	"regexp"
 	"time"
@@ -14,15 +14,6 @@ type Id struct {
 	value uuid.UUID
 }
 
-type ExternalId struct {
-	Id    Id
-	Value string
-}
-
-type Reference struct {
-	value string
-}
-
 func NewId() (Id, error) {
 	value, err := uuid.NewV7()
 	if err != nil {
@@ -32,23 +23,85 @@ func NewId() (Id, error) {
 	return Id{value}, nil
 }
 
-func (id *Id) ToExternal() ExternalId {
-	base62.StdEncoding.EncodeToString(id.value[:])
-	return ExternalId{}
+func (i Id) MarshalJSON() ([]byte, error) {
+	return json.Marshal(i.value)
+}
+
+func IdFromValue(value uuid.UUID) Id {
+	return Id{value}
+}
+
+func (i Id) Value() uuid.UUID {
+	return i.value
+}
+
+func (id Id) ToExternal() ExternalId {
+	value := base62.StdEncoding.EncodeToString(id.value[:])
+	return ExternalId{id, value}
+}
+
+type ExternalId struct {
+	id    Id
+	value string
+}
+
+func (e ExternalId) Id() Id {
+	return e.id
+}
+
+func (e ExternalId) Value() string {
+	return e.value
+}
+
+type Timestamp struct {
+	value time.Time
+}
+
+func TimestampFromValue(value time.Time) Timestamp {
+	return Timestamp{value}
+}
+
+func (t Timestamp) Value() time.Time {
+	return t.value
+}
+
+func (t Timestamp) MarshalJSON() ([]byte, error) {
+	return json.Marshal(t.value)
+}
+
+func (o Option[T]) MarshalJSON() ([]byte, error) {
+	if o.IsNone() {
+		return json.Marshal(nil)
+	}
+
+	return json.Marshal(o.value)
+}
+
+type Reference struct {
+	value string
+}
+
+func (r Reference) MarshalJSON() ([]byte, error) {
+	return json.Marshal(r.value)
+}
+
+func (r Reference) Value() string {
+	return r.value
 }
 
 type CreateHub struct {
-	name Reference
+	Id   Id
+	Name Reference
 }
 
 type Hub struct {
-	id         Id
-	created_at time.Time    // TODO: Timestamp
-	updated_at sql.NullTime // TODO: Maybe[Timestamp]
-	name       Reference
+	Id        Id                `json:"id"`
+	CreatedAt Timestamp         `json:"createdAt"`
+	UpdatedAt Option[Timestamp] `json:"updatedAt"`
+	Name      Reference         `json:"name"`
 }
 
-func newReference(value string) (Reference, error) {
+func ReferenceFromValue(value string) (Reference, error) {
 	value_regexp, e := regexp.Compile("^[a-z]([-_]?[a-z0-9]+)*[a-z0-9]?$")
 	if e != nil {
 		panic(e)

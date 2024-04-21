@@ -1,6 +1,7 @@
 package model
 
 import (
+  "fmt"
 	"encoding/json"
 	"errors"
 	"regexp"
@@ -85,13 +86,27 @@ func (r Reference) MarshalJSON() ([]byte, error) {
 	return json.Marshal(r.value)
 }
 
+func (r *Reference) UnmarshalJSON(data []byte) error {
+  var value string 
+  json.Unmarshal(data, &value)
+
+  reference, err := ReferenceFromValue(value)
+  if err != nil {
+    fmt.Println(string(data))
+    return err
+  }
+
+  r.value = reference.value
+
+  return nil
+}
+
 func (r Reference) Value() string {
 	return r.value
 }
 
 type CreateHub struct {
-	Id   Id
-	Name Reference
+  Name Reference `json:"name"`
 }
 
 type Hub struct {

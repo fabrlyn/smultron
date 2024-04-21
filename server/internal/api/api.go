@@ -2,23 +2,50 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
+	"fabrlyn.com/smultron/server/internal/model"
 	"fabrlyn.com/smultron/server/internal/service"
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Api struct {
-  conn *pgx.Conn
+  conn *pgxpool.Pool
 }
 
-func NewApi(conn *pgx.Conn) Api {
+func NewApi(conn *pgxpool.Pool) Api {
   return Api{conn: conn}
 }
 
 func (a *Api) CreateHub(response http.ResponseWriter, request *http.Request) {
+  var createHub model.CreateHub
+
+  err := json.NewDecoder(request.Body).Decode(&createHub)
+  if err != nil {
+    response.WriteHeader(400)
+    response.Write([]byte(err.Error()))
+    return
+  }
+
+  fmt.Printf("Create hub: %+v", createHub)
+  hub, err := service.CreateHub(a.conn, createHub)
+  if err != nil {
+  response.WriteHeader(400)
+  response.Write([]byte(err.Error()))
+    return 
+  }
+
+  body, err := json.Marshal(hub)
+  if err != nil {
+  response.WriteHeader(500)
+  response.Write([]byte(err.Error()))
+    return 
+  }
+
   response.WriteHeader(200)
-  response.Write([]byte("Hej there!"))
+  response.Header().Set("Content-Type", "application/json")
+  response.Write(body)
 }
 
 func (a *Api) ListHubs(response http.ResponseWriter, request *http.Request) {

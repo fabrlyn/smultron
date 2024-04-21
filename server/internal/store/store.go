@@ -9,11 +9,11 @@ import (
 
 	"fabrlyn.com/smultron/server/internal/model"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func CreateConnection() *pgx.Conn {
-	conn, err := pgx.Connect(context.Background(), os.Getenv("DATABASE_URL"))
+func CreateConnection() *pgxpool.Pool {
+	conn, err := pgxpool.New(context.Background(), os.Getenv("DATABASE_URL"))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Unable to connect to database: %v\n", err)
 		os.Exit(1)
@@ -22,7 +22,7 @@ func CreateConnection() *pgx.Conn {
 	return conn
 }
 
-func ListHubs(conn *pgx.Conn) ([]model.Hub, error) {
+func ListHubs(conn *pgxpool.Pool) ([]model.Hub, error) {
 	rows, err := conn.Query(context.Background(), "select id, created_at, updated_at, name from hub order by name asc")
 	if err != nil {
 		return []model.Hub{}, err
@@ -60,7 +60,7 @@ func ListHubs(conn *pgx.Conn) ([]model.Hub, error) {
 	return hubs, nil
 }
 
-func FindHubById(db *pgx.Conn, hubId model.Id) (model.Hub, error) {
+func FindHubById(db *pgxpool.Pool, hubId model.Id) (model.Hub, error) {
 	var dbId uuid.UUID
 	var dbCreatedAt time.Time
 	var dbUpdatedAt *time.Time
@@ -73,12 +73,12 @@ func FindHubById(db *pgx.Conn, hubId model.Id) (model.Hub, error) {
 	).Scan(
 		&dbId,
 		&dbCreatedAt,
-		dbUpdatedAt,
+		&dbUpdatedAt,
 		&dbName,
 	)
 
 	if err != nil {
-		return model.Hub{}, errors.New("Failed to find hub by id")
+    return model.Hub{}, errors.New(fmt.Sprintf("Failed to find hub by id: %+v", err))
 	}
 
 	id := model.IdFromValue(dbId)
@@ -92,12 +92,12 @@ func FindHubById(db *pgx.Conn, hubId model.Id) (model.Hub, error) {
 	return model.Hub{Id: id, CreatedAt: createdAt, UpdatedAt: updatedAt, Name: name}, nil
 }
 
-func CreateHub(db *pgx.Conn, request model.CreateHub) (model.Hub, error) {
-	err := db.QueryRow(context.Background(), "insert into hub(id, name) values($1, $2)", request.Id.Value(), request.Name.Value())
+func CreateHub(db *pgxpool.Pool, id model.Id, request model.CreateHub) (model.Hub, error) {
+	_, err := db.Exec(context.Background(), "insert into hub(id, name) values($1, $2)", id.Value(), request.Name.Value())
 
 	if err != nil {
-		return model.Hub{}, errors.New(fmt.Sprintf("Failed to create hub: %v", err))
+		return model.Hub{}, errors.New(fmt.Sprintf("Failed to create hub: %+v", err))
 	}
 
-	return FindHubById(db, request.Id)
+	return FindHubById(db, id)
 }

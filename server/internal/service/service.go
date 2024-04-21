@@ -3,13 +3,18 @@ package service
 import (
 	"fabrlyn.com/smultron/server/internal/store"
 	"fabrlyn.com/smultron/server/internal/model"
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func CreateHub(conn *pgx.Conn, createHub model.CreateHub) (model.Hub, error) {
-  return store.CreateHub(conn, createHub)
+func CreateHub(conn *pgxpool.Pool, createHub model.CreateHub) (model.Hub, error) {
+  id, err := model.NewId()
+  if err != nil {
+    return model.Hub{}, err
+  }
+
+  return store.CreateHub(conn, id, createHub)
 }
 
-func ListHubs(conn *pgx.Conn) ([]model.Hub, error) {
+func ListHubs(conn *pgxpool.Pool) ([]model.Hub, error) {
   return store.ListHubs(conn)
 }

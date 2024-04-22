@@ -18,3 +18,8 @@ func CreateHub(conn *pgxpool.Pool, createHub model.CreateHub) (model.Hub, error)
 func ListHubs(conn *pgxpool.Pool) ([]model.Hub, error) {
   return store.ListHubs(conn)
 }
+
+func RegisterThing(conn *pgxpool.Pool, thingDiscovered model.ThingDiscovered) {
+  createThing := model.CreateThingFromThingDiscovered(thingDiscovered)
+  store.CreateThing(conn, createThing)
+}

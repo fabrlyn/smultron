@@ -23,3 +23,8 @@ func RegisterThing(conn *pgxpool.Pool, thingDiscovered model.ThingDiscovered) {
   createThing := model.CreateThingFromThingDiscovered(thingDiscovered)
   store.CreateThing(conn, createThing)
 }
+
+func RegisterSensor(conn *pgxpool.Pool, sensorDiscovered model.SensorDiscovered) {
+  createSensor := model.CreateSensorFromSensorDiscovered(sensorDiscovered)
+  store.CreateSensor(conn, createSensor)
+}

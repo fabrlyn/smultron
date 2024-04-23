@@ -46,17 +46,17 @@ func ListHubs(conn *pgxpool.Pool) ([]model.Hub, error) {
 			return hubs, err
 		}
 
-    id, err := model.IdFromValue(dbId)
-    if err != nil {
-      return hubs, err
-    }
+		id, err := model.IdFromValue(dbId)
+		if err != nil {
+			return hubs, err
+		}
 
-    createdAt := model.TimestampFromValue(dbCreatedAt)
-    updatedAt := model.Map(model.NewOption(dbUpdatedAt), model.TimestampFromValue)
-    name, err := model.ReferenceFromValue(dbName)
-    if err != nil {
-      return hubs, err
-    }
+		createdAt := model.TimestampFromValue(dbCreatedAt)
+		updatedAt := model.Map(model.NewOption(dbUpdatedAt), model.TimestampFromValue)
+		name, err := model.ReferenceFromValue(dbName)
+		if err != nil {
+			return hubs, err
+		}
 
 		hubs = append(hubs, model.Hub{Id: id, CreatedAt: createdAt, UpdatedAt: updatedAt, Name: name})
 	}
@@ -87,8 +87,8 @@ func FindHubById(db *pgxpool.Pool, hubId model.Id) (model.Hub, error) {
 
 	id, err := model.IdFromValue(dbId)
 	if err != nil {
-	  return model.Hub{}, err
-  }
+		return model.Hub{}, err
+	}
 
 	createdAt := model.TimestampFromValue(dbCreatedAt)
 	updatedAt := model.Map(model.NewOption(dbUpdatedAt), model.TimestampFromValue)
@@ -126,6 +126,80 @@ func CreateThing(db *pgxpool.Pool, createThing model.CreateThing) (model.Thing, 
 	return FindThingById(db, createThing.Id)
 }
 
+func CreateSensor(db *pgxpool.Pool, createSensor model.CreateSensor) (model.Sensor, error) {
+	_, err := db.Exec(
+		context.Background(),
+		"insert into sensor(id, hub_reference, part_of_thing_id) values ($1, $2, $3)",
+		createSensor.Id.Value(),
+		createSensor.HubReference.Value(),
+		createSensor.PartOfThingId.Value(),
+	)
+
+	if err != nil {
+		return model.Sensor{}, err
+	}
+
+	return FindSensorById(db, createSensor.Id)
+}
+
+func FindSensorById(db *pgxpool.Pool, sensorId model.Id) (model.Sensor, error) {
+	var dbId uuid.UUID
+	var dbCreatedAt time.Time
+	var dbUpdatedAt *time.Time
+	var dbName string
+	var dbPartOfThingId uuid.UUID
+
+	err := db.QueryRow(
+		context.Background(),
+		`
+		select 
+		  id, 
+		  created_at, 
+		  updated_at, 
+		  name,
+		  part_of_thing_id 
+		from sensor
+		where id = $1
+		`,
+		sensorId.Value(),
+	).Scan(
+		&dbId,
+		&dbCreatedAt,
+		&dbUpdatedAt,
+		&dbName,
+		&dbPartOfThingId,
+	)
+
+	if err != nil {
+		return model.Sensor{}, errors.New(fmt.Sprintf("Failed to find hub by id: %+v", err))
+	}
+
+	id, err := model.IdFromValue(dbId)
+	if err != nil {
+		return model.Sensor{}, err
+	}
+
+	partOfThingId, err := model.IdFromValue(dbPartOfThingId)
+	if err != nil {
+		return model.Sensor{}, err
+	}
+
+	createdAt := model.TimestampFromValue(dbCreatedAt)
+	updatedAt := model.Map(model.NewOption(dbUpdatedAt), model.TimestampFromValue)
+	hubReference, err := model.ReferenceFromValue(dbName)
+	if err != nil {
+		return model.Sensor{}, err
+	}
+
+	return model.Sensor{
+		Id:            id,
+		CreatedAt:     createdAt,
+		UpdatedAt:     updatedAt,
+		HubReference:  hubReference,
+		PartOfThingId: partOfThingId,
+	}, nil
+}
+
 func FindThingById(db *pgxpool.Pool, thingId model.Id) (model.Thing, error) {
 	var dbId uuid.UUID
 	var dbCreatedAt time.Time
@@ -158,22 +232,22 @@ func FindThingById(db *pgxpool.Pool, thingId model.Id) (model.Thing, error) {
 		return model.Thing{}, errors.New(fmt.Sprintf("Failed to find hub by id: %+v", err))
 	}
 
-  id, err := model.IdFromValue(dbId)
-  if err != nil {
-    return model.Thing{}, err
-  }
+	id, err := model.IdFromValue(dbId)
+	if err != nil {
+		return model.Thing{}, err
+	}
 
-  registeredByHubId, err := model.IdFromValue(dbRegisteredByHubId)
-  if err != nil {
-    return model.Thing{}, err
-  }
+	registeredByHubId, err := model.IdFromValue(dbRegisteredByHubId)
+	if err != nil {
+		return model.Thing{}, err
+	}
 
-  createdAt := model.TimestampFromValue(dbCreatedAt)
-  updatedAt := model.Map(model.NewOption(dbUpdatedAt), model.TimestampFromValue)
-  hubReference, err := model.ReferenceFromValue(dbName)
-  if err != nil {
-    return model.Thing{}, err
-  }
+	createdAt := model.TimestampFromValue(dbCreatedAt)
+	updatedAt := model.Map(model.NewOption(dbUpdatedAt), model.TimestampFromValue)
+	hubReference, err := model.ReferenceFromValue(dbName)
+	if err != nil {
+		return model.Thing{}, err
+	}
 
 	return model.Thing{
 		Id:                id,

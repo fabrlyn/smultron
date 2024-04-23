@@ -32,14 +32,14 @@ func (i *Id) UnmarshalJSON(data []byte) error {
 	var value string
 	json.Unmarshal(data, &value)
 
-  id, err := IdFromString(value)
-  if err != nil {
-    return err
-  }
+	id, err := IdFromString(value)
+	if err != nil {
+		return err
+	}
 
-  i.value = id.value
+	i.value = id.value
 
-  return nil
+	return nil
 }
 
 func IdFromString(stringValue string) (Id, error) {
@@ -79,7 +79,7 @@ func ExternalIdFromValue(value string) (ExternalId, error) {
 		return ExternalId{}, err
 	}
 
-  idValue, err := uuid.FromBytes(bytes)
+	idValue, err := uuid.FromBytes(bytes)
 	if err != nil {
 		return ExternalId{}, err
 	}
@@ -155,6 +155,7 @@ type CreateHub struct {
 	Name Reference `json:"name"`
 }
 
+// TODO: Remove json mapping, move up to api layer
 type Hub struct {
 	Id        Id                `json:"id"`
 	CreatedAt Timestamp         `json:"createdAt"`
@@ -181,10 +182,30 @@ type ThingDiscovered struct {
 	RegisteredByHubId Id
 }
 
+type SensorDiscovered struct {
+	Id            Id
+	HubReference  Reference
+	PartOfThingId Id
+}
+
 type CreateThing struct {
 	Id                Id
 	HubReference      Reference
 	RegisteredByHubId Id
+}
+
+type CreateSensor struct {
+	Id            Id
+	HubReference  Reference
+	PartOfThingId Id
+}
+
+func CreateSensorFromSensorDiscovered(sensorDiscovered SensorDiscovered) CreateSensor {
+	return CreateSensor{
+		Id:            sensorDiscovered.Id,
+		HubReference:  sensorDiscovered.HubReference,
+		PartOfThingId: sensorDiscovered.PartOfThingId,
+	}
 }
 
 func CreateThingFromThingDiscovered(thingDiscovered ThingDiscovered) CreateThing {
@@ -201,4 +222,12 @@ type Thing struct {
 	UpdatedAt         Option[Timestamp] `json:"updatedAt"`
 	HubReference      Reference         `json:"hubReference"`
 	RegisteredByHubId Id                `json:"registeredByHubId"`
+}
+
+type Sensor struct {
+	Id            Id                `json:"id"`
+	CreatedAt     Timestamp         `json:"createdAt"`
+	UpdatedAt     Option[Timestamp] `json:"updatedAt"`
+	HubReference  Reference         `json:"hubReference"`
+	PartOfThingId Id                `json:"partOfThingId"`
 }

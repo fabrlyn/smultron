@@ -26,7 +26,13 @@ import (
 //    .sensor.<id>
 
 type Inbox struct {
-  conn *pgxpool.Pool
+	conn *pgxpool.Pool
+}
+
+func NewInbox(conn *pgxpool.Pool) Inbox {
+	return Inbox{
+		conn: conn,
+	}
 }
 
 type ThingDiscovered struct {
@@ -42,35 +48,39 @@ func (t ThingDiscovered) ToModel(hubId model.Id) model.ThingDiscovered {
 	}
 }
 
-func (inbox *Inbox)handleThingDiscovered(msg *nats.Msg) {
+func (inbox *Inbox) handleThingDiscovered(msg *nats.Msg) {
 	var thingDiscovered ThingDiscovered
 
-  err := json.Unmarshal(msg.Data, &thingDiscovered)
-  if err != nil {
-    fmt.Printf("Failed to parse thing discovered, error: %+v, data: %+v", err, string(msg.Data))
-    return
-  }
+	err := json.Unmarshal(msg.Data, &thingDiscovered)
+	if err != nil {
+		fmt.Printf("Failed to parse thing discovered, error: %+v, data: %+v", err, string(msg.Data))
+		return
+	}
 
-  segments := strings.Split(msg.Subject, ".") 
-  hubId := model.ExternalIdFromValue(segments[2])
+	segments := strings.Split(msg.Subject, ".")
+	hubId, err := model.ExternalIdFromValue(segments[2])
+	if err != nil {
+		fmt.Printf("Failed to parse thing discovered id, error: %+v, segments: %+v", err, segments)
+		return
+	}
 
-	service.RegisterThing(inbox.conn, thingDiscovered.ToModel())
+	service.RegisterThing(inbox.conn, thingDiscovered.ToModel(hubId.Id()))
 }
 
-func (inbox *Inbox)Run() error {
+func (inbox *Inbox) Run() error {
 	conn, err := nats.Connect(nats.DefaultURL)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to connect to nats: %+v", err))
 	}
 
-	_, err = conn.Subscribe("in.hub.>", func(msg *nats.Msg) {
+  _, err = conn.Subscribe("in.hub.>", func(msg *nats.Msg) {
 		messageType := msg.Header.Get("messageType")
 		if messageType == "" {
 			return
 		}
 
 		switch messageType {
-		case "thingDiscovered":
+		case "thing.discovered":
 			inbox.handleThingDiscovered(msg)
 			return
 		case "sensorDiscovered":

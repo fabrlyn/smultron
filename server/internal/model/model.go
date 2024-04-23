@@ -28,6 +28,20 @@ func (i Id) MarshalJSON() ([]byte, error) {
 	return json.Marshal(i.value)
 }
 
+func (i *Id) UnmarshalJSON(data []byte) error {
+	var value string
+	json.Unmarshal(data, &value)
+
+  id, err := IdFromString(value)
+  if err != nil {
+    return err
+  }
+
+  i.value = id.value
+
+  return nil
+}
+
 func IdFromString(stringValue string) (Id, error) {
 	value, err := uuid.Parse(stringValue)
 	if err != nil {
@@ -60,7 +74,17 @@ type ExternalId struct {
 }
 
 func ExternalIdFromValue(value string) (ExternalId, error) {
-	id, err := IdFromString(value)
+	bytes, err := base62.StdEncoding.DecodeString(value)
+	if err != nil {
+		return ExternalId{}, err
+	}
+
+  idValue, err := uuid.FromBytes(bytes)
+	if err != nil {
+		return ExternalId{}, err
+	}
+
+	id, err := IdFromValue(idValue)
 	if err != nil {
 		return ExternalId{}, err
 	}

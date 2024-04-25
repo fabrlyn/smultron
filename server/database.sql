@@ -68,6 +68,8 @@ create table actuator(
   constraint fk_part_of_thing_id                foreign key(part_of_thing_id) references thing(id)
 );
 
+-- boolean reading
+
 create table boolean_reading(
   registered_at           timestamptz not null,
   received_at             timestamptz not null default (now() at time zone 'utc'),
@@ -77,15 +79,38 @@ create table boolean_reading(
 
 select create_hypertable(
   'boolean_reading', 
-  by_range('registered_at')
+  by_range('received_at')
 );
 
 create 
-  index ix_boolean_reading__registered_by_sensor_id__time_desc 
+  index ix_boolean_reading__registered_by_sensor_id__registered_at_desc 
   on boolean_reading(
     registered_by_sensor_id, 
     registered_at desc
   );
+
+-- i32 reading
+
+create table i32_reading(
+  registered_at           timestamptz not null,
+  received_at             timestamptz not null default (now() at time zone 'utc'),
+  value                   int         not null,
+  registered_by_sensor_id uuid        not null
+);
+
+select create_hypertable(
+  'i32_reading', 
+  by_range('received_at')
+);
+
+create 
+  index ix_i32_reading__registered_by_sensor_id__registered_at_desc 
+  on boolean_reading(
+    registered_by_sensor_id, 
+    registered_at desc
+  );
+
+-- signal actuation
 
 create table signal_actuation(
   time                    timestamptz not null default (now() at time zone 'utc'),

@@ -29,6 +29,10 @@ func RegisterSensor(conn *pgxpool.Pool, sensorDiscovered model.SensorDiscovered)
   store.CreateSensor(conn, createSensor)
 }
 
-func RegisterReading(conn *pgxpool.Pool, readingRegistered model.ReadingRegistered[bool]) {
+func RegisterBooleanReading(conn *pgxpool.Pool, readingRegistered model.ReadingRegistered[bool]) {
   store.RegisterBooleanReading(conn, readingRegistered)
+}
+
+func RegisterI32Reading(conn *pgxpool.Pool, readingRegistered model.ReadingRegistered[int32]) {
+  store.RegisterI32Reading(conn, readingRegistered)
 }

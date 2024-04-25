@@ -121,6 +121,14 @@ func (inbox *Inbox) handleReadingRegistered(msg *nats.Msg) {
 		return
 	}
 
+	segments := strings.Split(msg.Subject, ".")
+
+	sensorId, err := model.ExternalIdFromValue(segments[6])
+	if err != nil {
+		fmt.Printf("Failed to parse sensor discovered id, error: %+v, segments: %+v", err, segments)
+		return
+	}
+
 	switch valueType {
 	case "boolean":
 		var reading ReadingRegistered[bool]
@@ -131,17 +139,26 @@ func (inbox *Inbox) handleReadingRegistered(msg *nats.Msg) {
 			return
 		}
 
-		segments := strings.Split(msg.Subject, ".")
+		registeredAt := model.TimestampFromValue(reading.RegisteredAt)
 
-		sensorId, err := model.ExternalIdFromValue(segments[6])
+		service.RegisterBooleanReading(inbox.conn, model.ReadingRegistered[bool]{
+			Value:                reading.Value,
+			RegisteredAt:         registeredAt,
+			RegisteredBySensorId: sensorId.Id(),
+		})
+		return
+	case "i32":
+		var reading ReadingRegistered[int32]
+
+		err := json.Unmarshal(msg.Data, &reading)
 		if err != nil {
-			fmt.Printf("Failed to parse sensor discovered id, error: %+v, segments: %+v", err, segments)
+			fmt.Printf("Failed to parse reading registered, error: %+v, data: %+v", err, string(msg.Data))
 			return
 		}
 
 		registeredAt := model.TimestampFromValue(reading.RegisteredAt)
 
-		service.RegisterReading(inbox.conn, model.ReadingRegistered[bool]{
+		service.RegisterI32Reading(inbox.conn, model.ReadingRegistered[int32]{
 			Value:                reading.Value,
 			RegisteredAt:         registeredAt,
 			RegisteredBySensorId: sensorId.Id(),

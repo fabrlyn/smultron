@@ -138,6 +138,18 @@ func RegisterBooleanReading(db *pgxpool.Pool, readingRegistered model.ReadingReg
 	return err
 }
 
+func RegisterI32Reading(db *pgxpool.Pool, readingRegistered model.ReadingRegistered[int32])  error {
+	_, err := db.Exec(
+		context.Background(),
+		"insert into i32_reading(registered_at, value, registered_by_sensor_id) values ($1, $2, $3)",
+		readingRegistered.RegisteredAt.Value(),
+		readingRegistered.Value,
+		readingRegistered.RegisteredBySensorId.Value(),
+	)
+
+	return err
+}
+
 func CreateSensor(db *pgxpool.Pool, createSensor model.CreateSensor) (model.Sensor, error) {
 	_, err := db.Exec(
 		context.Background(),

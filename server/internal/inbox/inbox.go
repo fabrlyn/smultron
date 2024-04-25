@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"fabrlyn.com/smultron/server/internal/model"
 	"fabrlyn.com/smultron/server/internal/service"
@@ -33,6 +34,11 @@ func NewInbox(conn *pgxpool.Pool) Inbox {
 	return Inbox{
 		conn: conn,
 	}
+}
+
+type ReadingRegistered[V any] struct {
+	Value        V         `json:"value"`
+	RegisteredAt time.Time `json:"registeredAt"`
 }
 
 type SensorDiscovered struct {
@@ -109,6 +115,44 @@ func (inbox *Inbox) handleSensorDiscovered(msg *nats.Msg) {
 	service.RegisterSensor(inbox.conn, sensorDiscovered.ToModel(thingId.Id(), sensorId.Id()))
 }
 
+func (inbox *Inbox) handleReadingRegistered(msg *nats.Msg) {
+	valueType := msg.Header.Get("valueType")
+	if valueType == "" {
+		return
+	}
+
+	switch valueType {
+	case "boolean":
+		var reading ReadingRegistered[bool]
+
+		err := json.Unmarshal(msg.Data, &reading)
+		if err != nil {
+			fmt.Printf("Failed to parse reading registered, error: %+v, data: %+v", err, string(msg.Data))
+			return
+		}
+
+		segments := strings.Split(msg.Subject, ".")
+
+		sensorId, err := model.ExternalIdFromValue(segments[6])
+		if err != nil {
+			fmt.Printf("Failed to parse sensor discovered id, error: %+v, segments: %+v", err, segments)
+			return
+		}
+
+		registeredAt := model.TimestampFromValue(reading.RegisteredAt)
+
+		service.RegisterReading(inbox.conn, model.ReadingRegistered[bool]{
+			Value:                reading.Value,
+			RegisteredAt:         registeredAt,
+			RegisteredBySensorId: sensorId.Id(),
+		})
+		return
+	default:
+		return
+	}
+
+}
+
 func (inbox *Inbox) Run() error {
 	conn, err := nats.Connect(nats.DefaultURL)
 	if err != nil {
@@ -128,7 +172,8 @@ func (inbox *Inbox) Run() error {
 		case "sensor.discovered":
 			inbox.handleSensorDiscovered(msg)
 			return
-		case "readingRegistered":
+		case "reading.registered":
+			inbox.handleReadingRegistered(msg)
 			return
 		default:
 			fmt.Printf("Received message with unknown message type. Headers: %+v Body: %+v", msg.Header, string(msg.Data))

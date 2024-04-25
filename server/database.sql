@@ -69,21 +69,22 @@ create table actuator(
 );
 
 create table boolean_reading(
-  time                    timestamptz not null default (now() at time zone 'utc'),
+  registered_at           timestamptz not null,
+  received_at             timestamptz not null default (now() at time zone 'utc'),
   value                   boolean     not null,
   registered_by_sensor_id uuid        not null
 );
 
 select create_hypertable(
   'boolean_reading', 
-  by_range('time')
+  by_range('registered_at')
 );
 
 create 
   index ix_boolean_reading__registered_by_sensor_id__time_desc 
   on boolean_reading(
     registered_by_sensor_id, 
-    time desc
+    registered_at desc
   );
 
 create table signal_actuation(

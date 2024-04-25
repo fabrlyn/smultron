@@ -126,6 +126,18 @@ func CreateThing(db *pgxpool.Pool, createThing model.CreateThing) (model.Thing, 
 	return FindThingById(db, createThing.Id)
 }
 
+func RegisterBooleanReading(db *pgxpool.Pool, readingRegistered model.ReadingRegistered[bool])  error {
+	_, err := db.Exec(
+		context.Background(),
+		"insert into boolean_reading(registered_at, value, registered_by_sensor_id) values ($1, $2, $3)",
+		readingRegistered.RegisteredAt.Value(),
+		readingRegistered.Value,
+		readingRegistered.RegisteredBySensorId.Value(),
+	)
+
+	return err
+}
+
 func CreateSensor(db *pgxpool.Pool, createSensor model.CreateSensor) (model.Sensor, error) {
 	_, err := db.Exec(
 		context.Background(),

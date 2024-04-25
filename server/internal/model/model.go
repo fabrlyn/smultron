@@ -231,3 +231,9 @@ type Sensor struct {
 	HubReference  Reference         `json:"hubReference"`
 	PartOfThingId Id                `json:"partOfThingId"`
 }
+
+type ReadingRegistered[V any] struct {
+	Value                V
+	RegisteredAt         Timestamp
+	RegisteredBySensorId Id
+}

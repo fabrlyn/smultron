@@ -1,5 +1,25 @@
-$!/bin/zsh
+#!/bin/sh
 
-local endpoint=$(cat <json> | jq '.additional| map(select(.kind.tag == "SRV")) | .[0] | (.kind.content.target + ":" + (.kind.content.port|tostring))' -r)
+# Usage: ./run
 
-local discovery=$(paco get $endpoint/.well-known/core)
+stdbuf -oL nats sub --raw mdns.discovered  |
+  while IFS= read -r line
+  do
+    endpoint=$(cat $line | jq '.answers | map(select(.kind.tag == "SRV")) | .[0] | (.kind.content.target + ":" + (.kind.content.port | tostring))' -r)
+
+    response=$(coapcli get --url coap://$endpoint/.well-known/core)
+    if [[ $? != 0 ]]; then
+      return
+    fi
+
+    payload=$(\
+      jq -n \
+        --arg e "$endpoint" \
+        --arg r "response" \
+        '{endpoint: $e, response: $r}'
+    )
+
+    nats publish coap.discovered "$payload"
+
+  done
+

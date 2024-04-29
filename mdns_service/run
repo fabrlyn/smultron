@@ -9,5 +9,5 @@
 stdbuf -oL fm-dns $1 --interval $2 |
   while IFS= read -r line
   do
-      nats publish mdns "$line"
+      nats publish mdns.coap.discovered "$line"
   done

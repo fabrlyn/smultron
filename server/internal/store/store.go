@@ -126,7 +126,7 @@ func CreateThing(db *pgxpool.Pool, createThing model.CreateThing) (model.Thing, 
 	return FindThingById(db, createThing.Id)
 }
 
-func RegisterBooleanReading(db *pgxpool.Pool, readingRegistered model.ReadingRegistered[bool])  error {
+func RegisterBooleanReading(db *pgxpool.Pool, readingRegistered model.ReadingRegistered[bool]) error {
 	_, err := db.Exec(
 		context.Background(),
 		"insert into boolean_reading(registered_at, value, registered_by_sensor_id) values ($1, $2, $3)",
@@ -138,7 +138,7 @@ func RegisterBooleanReading(db *pgxpool.Pool, readingRegistered model.ReadingReg
 	return err
 }
 
-func RegisterI32Reading(db *pgxpool.Pool, readingRegistered model.ReadingRegistered[int32])  error {
+func RegisterI32Reading(db *pgxpool.Pool, readingRegistered model.ReadingRegistered[int32]) error {
 	_, err := db.Exec(
 		context.Background(),
 		"insert into i32_reading(registered_at, value, registered_by_sensor_id) values ($1, $2, $3)",

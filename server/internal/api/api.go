@@ -19,6 +19,13 @@ func NewApi(conn *pgxpool.Pool) Api {
 }
 
 func (a *Api) CreateHub(response http.ResponseWriter, request *http.Request) {
+  // Validate request
+  // Create a new server.model.Message<server.model.CreateHub>
+  // Insert the http-service instance id and correlation id into nats key value
+  // Send command
+  // Any http-service instance picks up HubCreated event and uses the correlation id to look up the requesting http-service instance
+  // Publish the http-service internal nats topic to notify the specific http-service instance that the event occured.
+  // The same would go for a non-succesfull response or waiting for multiple events to be published.
   var createHub model.CreateHub
 
   err := json.NewDecoder(request.Body).Decode(&createHub)

@@ -1,36 +1,5 @@
 begin;
 
-create function validate_reference_characters(text) returns boolean as
-$$ 
-begin
-  return $1 ~ '^[a-z]([-_]?[a-z0-9]+)*[a-z0-9]?$'; 
-end 
-$$ language plpgsql;
-
-create function validate_reference_length(text) returns boolean as
-$$
-begin
-  return length($1) <= 80;
-end
-$$ language plpgsql;
-
-create function validate_reference(text) returns boolean as
-$$
-begin
-  return validate_reference_characters($1) and validate_reference_length($1);
-end
-$$ language plpgsql;
-
-create table hub(
-  id          uuid        not null,
-  created_at  timestamptz not null default (now() at time zone 'utc'),
-  updated_at  timestamptz,
-  name        text        not null,
-
-  constraint pk_hub       primary key(id),
-  constraint ck_name      check(validate_reference(name)),
-  constraint uq_hub__name unique(name)
-);
 
 create table thing(
   id                   uuid        not null,

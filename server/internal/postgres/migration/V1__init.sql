@@ -36,12 +36,12 @@ create table thing(
 );
 
 create table data_type(
-  id not null,
+  id         text        not null,
   created_at timestamptz not null default(now() at time zone 'utc'),
 
   constraint pk_data_type primary key(id),
-  constraint ck_id        check(1 <= length(id)),
-)
+  constraint ck_id        check(1 <= length(id))
+);
 
 create table sensor(
   id           uuid         not null default(gen_random_uuid()),

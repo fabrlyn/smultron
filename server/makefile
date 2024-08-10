@@ -12,7 +12,7 @@ migrate: clear
 test: migrate
 	go test -v ./...
 
-clear: up
+clear:
 	PGPASSWORD=password psql -U smultron -d postgres -h localhost -p 5432 -c "drop database smultron"
 	PGPASSWORD=password psql -U smultron -d postgres -h localhost -p 5432 -c "create database smultron"
 
